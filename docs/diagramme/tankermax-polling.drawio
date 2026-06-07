@@ -1,0 +1,382 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram name="ER-Diagramm (3NF)" id="er">
+    <mxGraphModel dx="1024" dy="768" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="tbl_brand" value="brand" style="swimlane;html=1;startSize=26;fontStyle=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="60" width="220" height="66" as="geometry" />
+        </mxCell>
+        <mxCell id="brand_id" value="id : bigint  [PK]" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_brand">
+          <mxGeometry x="0" y="26" width="220" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="brand_name" value="name : varchar(128)  [UQ]" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_brand">
+          <mxGeometry x="0" y="46" width="220" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tbl_fuel_type" value="fuel_type" style="swimlane;html=1;startSize=26;fontStyle=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="180" width="220" height="86" as="geometry" />
+        </mxCell>
+        <mxCell id="ft_id" value="id : bigint  [PK]" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_fuel_type">
+          <mxGeometry x="0" y="26" width="220" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="ft_code" value="code : varchar(16)  [UQ]" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_fuel_type">
+          <mxGeometry x="0" y="46" width="220" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="ft_label" value="label : varchar(255)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_fuel_type">
+          <mxGeometry x="0" y="66" width="220" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tbl_station" value="station" style="swimlane;html=1;startSize=26;fontStyle=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;" vertex="1" parent="1">
+          <mxGeometry x="380" y="40" width="300" height="306" as="geometry" />
+        </mxCell>
+        <mxCell id="st_id" value="id : varchar(36)  [PK]" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_station">
+          <mxGeometry x="0" y="26" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_brand" value="brand_id : bigint  [FK -&gt; brand]" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_station">
+          <mxGeometry x="0" y="46" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_name" value="name : varchar(255)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_station">
+          <mxGeometry x="0" y="66" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_street" value="street : varchar(255)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_station">
+          <mxGeometry x="0" y="86" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_house" value="house_number : varchar(255)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_station">
+          <mxGeometry x="0" y="106" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_post" value="post_code : varchar(5)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_station">
+          <mxGeometry x="0" y="126" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_place" value="place : varchar(255)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_station">
+          <mxGeometry x="0" y="146" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_lat" value="latitude : double" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_station">
+          <mxGeometry x="0" y="166" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_lng" value="longitude : double" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_station">
+          <mxGeometry x="0" y="186" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_state" value="state : varchar(255)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_station">
+          <mxGeometry x="0" y="206" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_whole" value="whole_day : bit" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_station">
+          <mxGeometry x="0" y="226" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_first" value="first_imported_at : datetime(6)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_station">
+          <mxGeometry x="0" y="246" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_last" value="last_updated_at : datetime(6)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_station">
+          <mxGeometry x="0" y="266" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_details" value="details_fetched_at : datetime(6)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_station">
+          <mxGeometry x="0" y="286" width="300" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tbl_ot" value="opening_time" style="swimlane;html=1;startSize=26;fontStyle=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;" vertex="1" parent="1">
+          <mxGeometry x="780" y="40" width="280" height="126" as="geometry" />
+        </mxCell>
+        <mxCell id="ot_id" value="id : bigint  [PK]" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_ot">
+          <mxGeometry x="0" y="26" width="280" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="ot_station" value="station_id : varchar(36)  [FK -&gt; station]" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_ot">
+          <mxGeometry x="0" y="46" width="280" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="ot_desc" value="description : varchar(255)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_ot">
+          <mxGeometry x="0" y="66" width="280" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="ot_start" value="start_time : time(0)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_ot">
+          <mxGeometry x="0" y="86" width="280" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="ot_end" value="end_time : time(0)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_ot">
+          <mxGeometry x="0" y="106" width="280" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tbl_oo" value="opening_override" style="swimlane;html=1;startSize=26;fontStyle=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;" vertex="1" parent="1">
+          <mxGeometry x="780" y="206" width="280" height="86" as="geometry" />
+        </mxCell>
+        <mxCell id="oo_id" value="id : bigint  [PK]" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_oo">
+          <mxGeometry x="0" y="26" width="280" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="oo_station" value="station_id : varchar(36)  [FK -&gt; station]" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_oo">
+          <mxGeometry x="0" y="46" width="280" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="oo_desc" value="description : varchar(512)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_oo">
+          <mxGeometry x="0" y="66" width="280" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tbl_po" value="price_observation" style="swimlane;html=1;startSize=26;fontStyle=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=center;" vertex="1" parent="1">
+          <mxGeometry x="380" y="420" width="300" height="106" as="geometry" />
+        </mxCell>
+        <mxCell id="po_id" value="id : bigint  [PK]" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_po">
+          <mxGeometry x="0" y="26" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="po_station" value="station_id : varchar(36)  [FK, UQ*]" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_po">
+          <mxGeometry x="0" y="46" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="po_observed" value="observed_at : datetime(6)  [UQ*]" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_po">
+          <mxGeometry x="0" y="66" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="po_status" value="status : enum(OPEN, CLOSED)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_po">
+          <mxGeometry x="0" y="86" width="300" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tbl_fp" value="fuel_price" style="swimlane;html=1;startSize=26;fontStyle=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="420" width="300" height="106" as="geometry" />
+        </mxCell>
+        <mxCell id="fp_id" value="id : bigint  [PK]" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_fp">
+          <mxGeometry x="0" y="26" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="fp_obs" value="observation_id : bigint  [FK, UQ*]" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_fp">
+          <mxGeometry x="0" y="46" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="fp_ft" value="fuel_type_id : bigint  [FK, UQ*]" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_fp">
+          <mxGeometry x="0" y="66" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="fp_amount" value="amount : decimal(6,3)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="tbl_fp">
+          <mxGeometry x="0" y="86" width="300" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_st_brand" value="n .. 1" style="endArrow=open;html=1;endFill=0;fontSize=10;" edge="1" parent="1" source="st_brand" target="tbl_brand">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ot_st" value="n .. 1" style="endArrow=open;html=1;endFill=0;fontSize=10;" edge="1" parent="1" source="ot_station" target="tbl_station">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_oo_st" value="n .. 1" style="endArrow=open;html=1;endFill=0;fontSize=10;" edge="1" parent="1" source="oo_station" target="tbl_station">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_po_st" value="n .. 1" style="endArrow=open;html=1;endFill=0;fontSize=10;" edge="1" parent="1" source="po_station" target="tbl_station">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_fp_po" value="n .. 1" style="endArrow=open;html=1;endFill=0;fontSize=10;" edge="1" parent="1" source="fp_obs" target="tbl_po">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_fp_ft" value="n .. 1" style="endArrow=open;html=1;endFill=0;fontSize=10;" edge="1" parent="1" source="fp_ft" target="tbl_fuel_type">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="er_note" value="UQ* = zusammengesetzte Eindeutigkeit:&#10;price_observation (station_id, observed_at)&#10;fuel_price (observation_id, fuel_type_id)" style="text;html=1;align=left;verticalAlign=top;fillColor=#f5f5f5;strokeColor=#999999;spacing=6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="560" width="360" height="60" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram name="Komponenten" id="components">
+    <mxGraphModel dx="1024" dy="768" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="c_props" value="application.properties&#10;+ .env (Geheimnisse)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="180" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="c_propsbean" value="TankerkoenigProperties&#10;@ConfigurationProperties" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="40" y="140" width="180" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="c_sched" value="Spring Scheduler&#10;@EnableScheduling" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="40" y="260" width="180" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c_init" value="FuelTypeInitializer&#10;(ApplicationRunner)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="320" y="150" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="c_poll" value="LocationPricePollService&#10;@Scheduled pollNextLocation()" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="320" y="250" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="c_enrich" value="StationDetailEnrichmentService&#10;@Scheduled enrichPendingStations()" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="320" y="350" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="c_catalog" value="StationCatalogService&#10;(Stammdaten, Marken, Zeiten)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="320" y="460" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="c_price" value="PriceRecordingService&#10;(Beobachtung + Preise)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="320" y="560" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c_client" value="TankerkoenigApiClient" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="600" y="300" width="180" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_limiter" value="TankerkoenigRateLimiter&#10;(globale Drosselung)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="600" y="380" width="180" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="c_rest" value="RestClient&#10;(RestClientConfig)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="850" y="300" width="160" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c_repos" value="Repositories&#10;(Spring Data JPA)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="600" y="520" width="180" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="c_domain" value="Domain (3NF)&#10;Station · Brand · FuelType&#10;PriceObservation · FuelPrice&#10;OpeningTime · OpeningOverride" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="600" y="610" width="180" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c_api" value="Tankerkönig-API&#10;list.php / detail.php" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="850" y="380" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="c_db" value="MariaDB `tankermax`&#10;(Flyway-Schema)" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="850" y="560" width="160" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ce1" value="liefert Werte" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="c_props" target="c_propsbean">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ce2" value="konfiguriert" style="endArrow=open;html=1;fontSize=10;dashed=1;" edge="1" parent="1" source="c_propsbean" target="c_poll">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ce2b" value="konfiguriert" style="endArrow=open;html=1;fontSize=10;dashed=1;" edge="1" parent="1" source="c_propsbean" target="c_enrich">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ce2c" value="konfiguriert" style="endArrow=open;html=1;fontSize=10;dashed=1;" edge="1" parent="1" source="c_propsbean" target="c_limiter">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ce3" value="triggert" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="c_sched" target="c_poll">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ce4" value="triggert" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="c_sched" target="c_enrich">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ce5" value="fetchStations()" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="c_poll" target="c_client">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ce6" value="fetchStationDetail()" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="c_enrich" target="c_client">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ce7" value="awaitSlot / penalize" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="c_client" target="c_limiter">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ce8" value="HTTP" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="c_client" target="c_rest">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ce9" value="HTTPS" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="c_rest" target="c_api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ce10" value="saveFromListItem()" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="c_poll" target="c_catalog">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ce11" value="recordFromListItem()" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="c_poll" target="c_price">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ce12" value="applyDetail()" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="c_enrich" target="c_catalog">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ce13" value="" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="c_catalog" target="c_repos">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ce14" value="" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="c_price" target="c_repos">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ce15" value="FuelType anlegen" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="c_init" target="c_repos">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ce16" value="mappt" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="c_repos" target="c_domain">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ce17" value="JDBC" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="c_repos" target="c_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram name="Ablauf (Polling + Anreicherung)" id="flow">
+    <mxGraphModel dx="1024" dy="768" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="f_start" value="Scheduler:&#10;pollNextLocation()" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="80" y="40" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="f_d1" value="Orte&#10;konfiguriert?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="90" y="130" width="140" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="f_skip" value="überspringen&#10;(WARN protokollieren)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="300" y="145" width="170" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="f_count" value="pending = Tankstellen&#10;ohne Detaildaten zählen" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="70" y="250" width="180" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="f_d2" value="pending == 0?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="90" y="340" width="140" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="f_d3" value="Anreicherung&#10;blockiert?&#10;(maxStallCycles)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="300" y="335" width="160" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="f_pause" value="Preisabfrage pausieren&#10;(Anreicherung hat Vorrang)&#10;→ nächstes Intervall warten" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="540" y="335" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="f_reset" value="Anreicherungs-Tracking&#10;zurücksetzen" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="70" y="460" width="180" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="f_pick" value="nächsten Ort wählen&#10;(Rotation)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="70" y="550" width="180" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="f_fetch" value="apiClient.fetchStations(location)&#10;[RateLimiter.awaitSlot]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="50" y="640" width="220" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="f_loop" value="für jede Tankstelle&#10;(eigene Transaktion)" style="shape=process;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="60" y="730" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="f_save" value="StationCatalogService.saveFromListItem()&#10;(Station + Marke anlegen/aktualisieren)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="820" width="240" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="f_record" value="PriceRecordingService.recordFromListItem()&#10;→ PriceObservation + FuelPrice (E5/E10/Diesel)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="900" width="240" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="f_end" value="Zusammenfassung&#10;protokollieren" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="80" y="990" width="160" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="fe1" value="" style="endArrow=open;html=1;" edge="1" parent="1" source="f_start" target="f_d1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fe2" value="nein" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="f_d1" target="f_skip">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fe3" value="ja" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="f_d1" target="f_count">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fe4" value="" style="endArrow=open;html=1;" edge="1" parent="1" source="f_count" target="f_d2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fe5" value="nein" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="f_d2" target="f_d3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fe6" value="ja" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="f_d2" target="f_reset">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fe7" value="nein" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="f_d3" target="f_pause">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fe8" value="ja (erzwingen)" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="f_d3" target="f_pick">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fe9" value="" style="endArrow=open;html=1;" edge="1" parent="1" source="f_reset" target="f_pick">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fe10" value="" style="endArrow=open;html=1;" edge="1" parent="1" source="f_pick" target="f_fetch">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fe11" value="" style="endArrow=open;html=1;" edge="1" parent="1" source="f_fetch" target="f_loop">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fe12" value="" style="endArrow=open;html=1;" edge="1" parent="1" source="f_loop" target="f_save">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fe13" value="" style="endArrow=open;html=1;" edge="1" parent="1" source="f_save" target="f_record">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fe14" value="nächste Tankstelle / fertig" style="endArrow=open;html=1;fontSize=10;" edge="1" parent="1" source="f_record" target="f_end">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="f_note" value="Anreicherung (StationDetailEnrichmentService) läuft als eigener Zeitplan:&#10;solange pending &gt; 0 ruft sie je Tankstelle detail.php ab (RateLimiter-gedrosselt)&#10;und übernimmt Öffnungszeiten, Ausnahmeregeln und Bundesland. Die&#10;Preisabfrage pausiert so lange (siehe Verzweigung oben)." style="text;html=1;align=left;verticalAlign=top;fillColor=#f5f5f5;strokeColor=#999999;spacing=6;" vertex="1" parent="1">
+          <mxGeometry x="540" y="640" width="420" height="100" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
