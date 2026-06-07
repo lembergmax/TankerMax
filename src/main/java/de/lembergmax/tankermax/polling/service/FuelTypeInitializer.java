@@ -5,6 +5,7 @@ import de.lembergmax.tankermax.polling.repository.FuelTypeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
  * noch nicht vorhanden sind.
  */
 @Component
+@Profile("ingest")
 @RequiredArgsConstructor
 public class FuelTypeInitializer implements ApplicationRunner {
 

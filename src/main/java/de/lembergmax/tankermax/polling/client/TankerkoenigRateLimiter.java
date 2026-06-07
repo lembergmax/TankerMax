@@ -3,6 +3,7 @@ package de.lembergmax.tankermax.polling.client;
 import de.lembergmax.tankermax.polling.config.TankerkoenigProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
  * auch bei gleichzeitiger Preisabfrage und Detail-Anreicherung eingehalten.</p>
  */
 @Component
+@Profile("ingest")
 public class TankerkoenigRateLimiter {
 
     /** Logger dieser Klasse. */

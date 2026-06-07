@@ -3,6 +3,7 @@ package de.lembergmax.tankermax;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
@@ -10,15 +11,16 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mariadb.MariaDBContainer;
 
 /**
- * Integrationstest, der den vollständigen Anwendungskontext gegen eine echte
- * Wegwerf-MariaDB hochfährt. Dadurch wird zugleich geprüft, dass Hibernate das
- * Schema per {@code ddl-auto=update} aus den Entitäten anlegt und der gesamte
- * Bean-Graph fehlerfrei lädt.
+ * Integrationstest, der den vollständigen kombinierten Kontext {@code web,ingest} gegen eine
+ * echte Wegwerf-MariaDB hochfährt. Dadurch wird zugleich geprüft, dass Hibernate das Schema
+ * per {@code ddl-auto=update} aus den Entitäten anlegt und beide Bean-Graphen (Erfassung und
+ * Web) gemeinsam fehlerfrei laden.
  *
  * <p>Ohne laufenden Docker-Daemon wird der Test übersprungen ({@code disabledWithoutDocker}),
  * sodass lokale Builds ohne Docker dennoch grün sind; in der CI mit Docker läuft er.</p>
  */
 @SpringBootTest
+@ActiveProfiles({"web", "ingest"})
 @Testcontainers(disabledWithoutDocker = true)
 class TankerMaxApplicationTests {
 

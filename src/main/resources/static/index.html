@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tankerkönig – Spritpreise</title>
+<link rel="stylesheet" href="neo.css">
+<script src="assets/theme-init.js"></script>
+</head>
+<body data-variant="pro">
+<div class="app">
+
+  <header class="hdr">
+    <div class="brand">
+      <div class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="22" x2="15" y2="22"/><path d="M4 22V4a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v18"/><path d="M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 4 0V9l-4-4"/></svg></div>
+      <div class="brand-tx"><b>Tankerkönig</b><span>Spritpreis-Verlauf</span></div>
+    </div>
+    <div class="region-sel">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      <select id="regionSel" aria-label="Region wählen"></select>
+    </div>
+    <div class="seg">
+      <button data-fuel="e5">E5</button><button data-fuel="e10">E10</button><button data-fuel="diesel" class="active">Diesel</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="theme-seg" id="themeSeg">
+      <button data-mode="light" title="Hell"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.9" y1="4.9" x2="6.6" y2="6.6"/><line x1="17.4" y1="17.4" x2="19.1" y2="19.1"/><line x1="4.9" y1="19.1" x2="6.6" y2="17.4"/><line x1="17.4" y1="6.6" x2="19.1" y2="4.9"/></svg></button>
+      <button data-mode="system" title="System"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></button>
+      <button data-mode="dark" title="Dunkel"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+    </div>
+  </header>
+
+  <div class="main">
+    <section class="col left">
+      <div class="list-head"><h2>Tankstellen</h2>
+        <div class="sortpills"><button data-sort="price">Günstig</button><button data-sort="dist" class="active">Nähe</button></div>
+      </div>
+      <div class="list" id="list"></div>
+    </section>
+
+    <section class="col detail">
+      <div class="dhead" id="dhead"></div>
+      <div class="tiles" id="tiles"></div>
+      <div class="split">
+        <div class="chart-card">
+          <div class="cc-top">
+            <div class="tbset"><button class="tb" data-tf="300">5m</button><button class="tb active" data-tf="900">15m</button><button class="tb" data-tf="3600">1h</button><button class="tb" data-tf="14400">4h</button><button class="tb" data-tf="86400">1T</button></div>
+            <div class="tbset"><button class="tb active" data-ct="candle">Kerzen</button><button class="tb" data-ct="area">Fläche</button><button class="tb" data-ct="line">Linie</button></div>
+            <div class="tbset"><button class="tb" data-ind="sma">SMA</button><button class="tb" data-ind="ema">EMA</button><button class="tb" data-ind="bb">BB</button></div>
+            <div class="cc-spacer"></div>
+            <button class="cmp-btn" id="cmpBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 3 21 7 17 11"/><line x1="21" y1="7" x2="6" y2="7"/><polyline points="7 21 3 17 7 13"/><line x1="3" y1="17" x2="18" y2="17"/></svg><span class="lbl">Vergleichen</span></button>
+          </div>
+          <div class="chart-frame" id="chartFrame">
+            <div id="chartEl"></div>
+            <div class="chart-tooltip" id="chartTooltip"></div>
+          </div>
+        </div>
+        <div class="rcol" id="rcol"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script src="vendor/lightweight-charts.standalone.production.js"></script>
+<script src="assets/api.js"></script>
+<script src="assets/chart.js"></script>
+<script src="assets/shared.js"></script>
+<script src="neo.js"></script>
+</body>
+</html>

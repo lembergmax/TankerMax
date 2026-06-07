@@ -2,6 +2,7 @@ package de.lembergmax.tankermax.polling.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
@@ -11,6 +12,7 @@ import java.time.Duration;
  * Stellt den vorkonfigurierten {@link RestClient} für die Tankerkönig-API bereit.
  */
 @Configuration
+@Profile("ingest")
 public class RestClientConfig {
 
     /**

@@ -8,6 +8,7 @@ import de.lembergmax.tankermax.polling.config.TankerkoenigProperties;
 import de.lembergmax.tankermax.polling.repository.StationRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -32,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * geschrieben und benötigen keine zusätzliche Synchronisierung.</p>
  */
 @Service
+@Profile("ingest")
 public class LocationPricePollService {
 
     /** Logger dieser Klasse. */

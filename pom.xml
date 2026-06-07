@@ -40,17 +40,13 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
-        <!-- Jackson (JSON) fuer das Deserialisieren der API-Antworten ueber den RestClient. -->
+        <!-- Eingebetteter Web-Server + Spring MVC fuer das Dashboard (Profil "web"); liefert
+             zugleich spring-web mit dem RestClient (Polling) und Jackson fuer JSON. Ob der
+             Web-Server startet, steuert spring.main.web-application-type (none im Profil "ingest",
+             servlet im Profil "web"). -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-json</artifactId>
-        </dependency>
-
-        <!-- spring-web liefert den RestClient; ein Web-Server wird bewusst nicht gestartet
-             (spring.main.web-application-type=none). -->
-        <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-web</artifactId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
 
         <dependency>
@@ -67,6 +63,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- MockMvc und @WebMvcTest fuer die Slice-Tests des Web-Layers. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
             <scope>test</scope>
         </dependency>
 

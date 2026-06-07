@@ -5,6 +5,7 @@ import de.lembergmax.tankermax.polling.client.dto.StationListResponse;
 import de.lembergmax.tankermax.polling.config.Location;
 import de.lembergmax.tankermax.polling.config.TankerkoenigProperties;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
@@ -19,6 +20,7 @@ import java.util.function.Supplier;
  * das Ratenlimit der API über alle Endpunkte und Threads hinweg eingehalten wird.</p>
  */
 @Component
+@Profile("ingest")
 @RequiredArgsConstructor
 public class TankerkoenigApiClient {
 

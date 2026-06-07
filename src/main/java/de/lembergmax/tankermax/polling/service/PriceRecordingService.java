@@ -10,6 +10,7 @@ import de.lembergmax.tankermax.polling.repository.FuelTypeRepository;
 import de.lembergmax.tankermax.polling.repository.PriceObservationRepository;
 import de.lembergmax.tankermax.polling.repository.StationRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,7 @@ import java.time.Instant;
  * zugehörigen Kraftstoffpreise.
  */
 @Service
+@Profile("ingest")
 @RequiredArgsConstructor
 public class PriceRecordingService {
 

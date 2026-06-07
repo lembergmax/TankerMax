@@ -14,6 +14,7 @@ import de.lembergmax.tankermax.polling.repository.StationRepository;
 import de.lembergmax.tankermax.polling.support.OpeningTimeParser;
 import de.lembergmax.tankermax.polling.support.PostalCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +26,7 @@ import java.util.List;
  * Öffnungszeiten und Ausnahmeregeln.
  */
 @Service
+@Profile("ingest")
 @RequiredArgsConstructor
 public class StationCatalogService {
 
