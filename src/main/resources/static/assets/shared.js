@@ -50,14 +50,15 @@
       fuel: FUELS.includes(lsGet('fuel')) ? lsGet('fuel') : null,
       sort: SORTS.includes(lsGet('sort')) ? lsGet('sort') : null,
       region: lsGet('region'),
+      hideClosed: lsGet('hideClosed') === 'true',
       compareOn: !!(savedCompare && savedCompare.on),
       compareIds: (savedCompare && Array.isArray(savedCompare.ids)) ? savedCompare.ids.slice(0, 4) : [],
     };
 
     const state = {
       fuel: saved.fuel || adapter.fuel || 'diesel', sort: saved.sort || 'dist',
-      region: null, selectedId: null, chartType: 'candle', tf: 900,
-      indicators: new Set(),
+      region: null, selectedId: null, chartType: 'candle', tf: 3600,
+      indicators: new Set(), hideClosed: saved.hideClosed,
       compare: saved.compareOn, compareIds: saved.compareIds, loadError: false,
     };
 
@@ -103,7 +104,7 @@
       if (adapter.renderListSkeleton) adapter.renderListSkeleton(ctx);
       if (!state.region) { stationCache = []; state.loadError = regionsFailed; seriesCache.clear(); return; }
       try {
-        const list = await API.getStations(state.region, state.fuel);
+        const list = await API.getStations(state.region, state.fuel, state.hideClosed);
         if (g != null && g !== nav) return;
         list.forEach(s => { s.brandStyle = window.TKBRAND.style(s.brand); });
         stationCache = list;
@@ -206,6 +207,20 @@
       if (!selected()) { const f = pickTop(); state.selectedId = f ? f.id : null; }
       await refresh(g);
     }
+    // Geschlossene Tankstellen aus-/einblenden: laedt die Liste serverseitig gefiltert neu
+    // (openOnly), bereinigt eine evtl. ausgeblendete Auswahl/Vergleichsauswahl und rendert neu.
+    async function setHideClosed(on) {
+      const g = ++nav;
+      state.hideClosed = on;
+      persist();
+      showDetailLoading();
+      await loadStations(g);
+      if (g !== nav) return;
+      state.compareIds = state.compareIds.filter(id => stationCache.some(s => s.id === id));
+      if (!selected()) { const f = pickTop(); state.selectedId = f ? f.id : null; }
+      if (state.compare && !state.compareIds.length && state.selectedId) state.compareIds = [state.selectedId];
+      await refresh(g);
+    }
     async function setRegion(rg) {
       const g = ++nav;
       state.region = rg;
@@ -239,6 +254,7 @@
     function persist() {
       lsSet('fuel', state.fuel);
       lsSet('sort', state.sort);
+      lsSet('hideClosed', String(state.hideClosed));
       if (state.region) lsSet('region', state.region);
       lsSet('compare', JSON.stringify({ on: state.compare, ids: state.compareIds }));
     }
@@ -255,6 +271,11 @@
       $$('[data-sort]').forEach(b => b.addEventListener('click', () => {
         state.sort = b.dataset.sort; markActive('[data-sort]', b); refreshList(); persist();
       }));
+      const hc = $('#hideClosed');
+      if (hc) {
+        hc.checked = state.hideClosed;
+        hc.addEventListener('change', () => setHideClosed(hc.checked));
+      }
       root.addEventListener('click', e => {
         // Entfernen-X im Vergleichspanel hat Vorrang und entfernt gezielt; ein Klick auf die
         // restliche Karte (linke Liste) waehlt aus bzw. schaltet die Station im Vergleich um.
@@ -297,7 +318,7 @@
       if (document.visibilityState !== 'visible' || state.compare || !state.region) return;
       const g = nav;
       let list;
-      try { list = await API.getStations(state.region, state.fuel); }
+      try { list = await API.getStations(state.region, state.fuel, state.hideClosed); }
       catch (e) { return; }
       if (g !== nav) return;
       list.forEach(s => { s.brandStyle = window.TKBRAND.style(s.brand); });

@@ -1,9 +1,8 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="TankerMax (ingest)" type="Application" factoryName="Application">
+  <configuration default="false" name="TankerMax (API)" type="Application" factoryName="Application">
     <option name="MAIN_CLASS_NAME" value="de.lembergmax.tankermax.TankerMaxApplication" />
     <module name="TankerMax" />
     <option name="PROGRAM_PARAMETERS" value="--spring.profiles.active=ingest" />
-    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
     <method v="2">
       <option name="Make" enabled="true" />
     </method>
