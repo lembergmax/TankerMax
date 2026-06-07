@@ -71,11 +71,12 @@ public class StationQueryService {
      * <p>Es werden nur Tankstellen innerhalb des Suchradius um den Ortsmittelpunkt zurückgegeben.
      * Eine unbekannte Region liefert eine leere Liste.</p>
      *
-     * @param region Kennung der Region
-     * @param fuelDb Datenbank-Code des Kraftstoffs
+     * @param region   Kennung der Region
+     * @param fuelDb   Datenbank-Code des Kraftstoffs
+     * @param openOnly {@code true}, um nur geöffnete Tankstellen zurückzugeben (geschlossene werden ausgeblendet)
      * @return Liste der Tankstellen der Region
      */
-    public List<StationDto> stations(final String region, final String fuelDb) {
+    public List<StationDto> stations(final String region, final String fuelDb, final boolean openOnly) {
         final Location center = centerFor(region);
         if (center == null) {
             return List.of();
@@ -90,6 +91,9 @@ public class StationQueryService {
             }
             final Double price = prices.get(base.id());
             final boolean open = price != null;
+            if (openOnly && !open) {
+                continue;
+            }
             stations.add(new StationDto(base.id(), base.brand(), base.name(),
                     base.street() == null ? "" : base.street(), base.postCode(), base.place(),
                     base.lat(), base.lng(), dist, open, base.wholeDay(), price,

@@ -17,8 +17,8 @@
   window.TKAPI = {
     getMeta: () => get('/meta'),
     getRegions: () => get('/regions'),
-    getStations: (region, fuel) =>
-      get('/stations?region=' + encodeURIComponent(region) + '&fuel=' + encodeURIComponent(fuel)),
+    getStations: (region, fuel, openOnly) =>
+      get('/stations?region=' + encodeURIComponent(region) + '&fuel=' + encodeURIComponent(fuel) + (openOnly ? '&openOnly=true' : '')),
     getHistory: (station, fuel) =>
       get('/history?station=' + encodeURIComponent(station) + '&fuel=' + encodeURIComponent(fuel)),
   };

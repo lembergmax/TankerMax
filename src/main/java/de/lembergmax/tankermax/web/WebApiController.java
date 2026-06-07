@@ -58,14 +58,16 @@ public class WebApiController {
     /**
      * Liefert die Tankstellen einer Region für einen Kraftstoff.
      *
-     * @param region Kennung der Region
-     * @param fuel   Frontend-Kennung des Kraftstoffs (e5/e10/diesel)
+     * @param region   Kennung der Region
+     * @param fuel     Frontend-Kennung des Kraftstoffs (e5/e10/diesel)
+     * @param openOnly {@code true}, um geschlossene Tankstellen auszublenden (nur geöffnete zurückgeben)
      * @return Liste der Tankstellen
      */
     @GetMapping("/stations")
     public List<StationDto> stations(@RequestParam @Size(max = MAX_IDENTIFIER_LENGTH) final String region,
-                                     @RequestParam final String fuel) {
-        return stationService.stations(region, requireKnownFuel(fuel));
+                                     @RequestParam final String fuel,
+                                     @RequestParam(defaultValue = "false") final boolean openOnly) {
+        return stationService.stations(region, requireKnownFuel(fuel), openOnly);
     }
 
     /**

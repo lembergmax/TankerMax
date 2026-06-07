@@ -1,6 +1,7 @@
 package de.lembergmax.tankermax.web;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -67,6 +68,20 @@ class WebApiControllerTest {
         mvc.perform(get("/api/regions"))
                 .andExpect(header().string("Content-Security-Policy", containsString("default-src 'self'")))
                 .andExpect(header().string("X-Content-Type-Options", "nosniff"));
+    }
+
+    /**
+     * Der Parameter {@code openOnly} wird gebunden und an den Dienst durchgereicht
+     * (serverseitiges Ausblenden geschlossener Tankstellen).
+     *
+     * @throws Exception wenn die Anfrage fehlschlägt
+     */
+    @Test
+    void openOnlyWirdAnDenDienstDurchgereicht() throws Exception {
+        when(stationService.stations("Dresden", "DIESEL", true)).thenReturn(List.of());
+        mvc.perform(get("/api/stations").param("region", "Dresden").param("fuel", "diesel").param("openOnly", "true"))
+                .andExpect(status().isOk());
+        verify(stationService).stations("Dresden", "DIESEL", true);
     }
 
 }
