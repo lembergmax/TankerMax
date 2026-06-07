@@ -11,10 +11,9 @@ import org.testcontainers.mariadb.MariaDBContainer;
 
 /**
  * Integrationstest, der den vollständigen Anwendungskontext gegen eine echte
- * Wegwerf-MariaDB hochfährt. Dadurch wird zugleich geprüft, dass die
- * Flyway-Migration greift (das Schema also angelegt wird) und Hibernates
- * {@code ddl-auto=validate} es ohne Beanstandung akzeptiert – der entscheidende
- * Beweis, dass Migration und Entitäten zusammenpassen.
+ * Wegwerf-MariaDB hochfährt. Dadurch wird zugleich geprüft, dass Hibernate das
+ * Schema per {@code ddl-auto=update} aus den Entitäten anlegt und der gesamte
+ * Bean-Graph fehlerfrei lädt.
  *
  * <p>Ohne laufenden Docker-Daemon wird der Test übersprungen ({@code disabledWithoutDocker}),
  * sodass lokale Builds ohne Docker dennoch grün sind; in der CI mit Docker läuft er.</p>

@@ -53,17 +53,6 @@
             <artifactId>spring-web</artifactId>
         </dependency>
 
-        <!-- Versionierte Schema-Migrationen (loest ddl-auto=update ab). spring-boot-flyway bringt
-             flyway-core samt Spring-Boot-Autokonfiguration; flyway-mysql deckt MariaDB ab. -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-flyway</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-mysql</artifactId>
-        </dependency>
-
         <dependency>
             <groupId>org.mariadb.jdbc</groupId>
             <artifactId>mariadb-java-client</artifactId>

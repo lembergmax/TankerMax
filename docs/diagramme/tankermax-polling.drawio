@@ -216,7 +216,7 @@
         <mxCell id="c_api" value="Tankerkönig-API&#10;list.php / detail.php" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
           <mxGeometry x="850" y="380" width="180" height="90" as="geometry" />
         </mxCell>
-        <mxCell id="c_db" value="MariaDB `tankermax`&#10;(Flyway-Schema)" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+        <mxCell id="c_db" value="MariaDB `tankermax`&#10;(Schema via Hibernate ddl-auto)" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
           <mxGeometry x="850" y="560" width="160" height="90" as="geometry" />
         </mxCell>
 

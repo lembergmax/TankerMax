@@ -5,8 +5,8 @@ Die Datei [`tankermax-polling.drawio`](tankermax-polling.drawio) enthält drei S
 
 1. **ER-Diagramm (3NF)** – das normalisierte Datenmodell mit allen Tabellen,
    Spalten, Primär-/Fremdschlüsseln und zusammengesetzten Eindeutigkeiten. Es
-   entspricht der Flyway-Baseline [`V1__baseline.sql`](../../src/main/resources/db/migration/V1__baseline.sql)
-   und den JPA-Entitäten im Paket `de.lembergmax.tankermax.domain`.
+   entspricht den JPA-Entitäten im Paket `de.lembergmax.tankermax.polling.domain`,
+   aus denen Hibernate (`ddl-auto=update`) das Schema erzeugt.
 2. **Komponenten** – das Zusammenspiel von Scheduler, Diensten, API-Client,
    Ratenbegrenzer, Repositories und externen Systemen (Tankerkönig-API, MariaDB).
 3. **Ablauf (Polling + Anreicherung)** – der Entscheidungsfluss eines Abfragezyklus
