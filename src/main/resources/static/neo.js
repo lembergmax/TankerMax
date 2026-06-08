@@ -55,8 +55,12 @@
 
     const t = $('#tiles'); if (t) { t.style.display = ''; renderTiles(d, c); }
 
+    const addr = [s.street, [s.postCode, s.place].filter(Boolean).join(' ')].filter(Boolean).join(', ');
     const html = '<div class="info-card"><h3>Details</h3>' +
-      kv('Marke', T.esc(s.brand)) + kv('Entfernung', c.ct1(s.dist) + ' km') +
+      kv('Marke', T.esc(s.brand)) +
+      kv('Adresse', T.esc(addr || '—'), 'addr') +
+      kv('Tankstellen-ID', T.esc(s.id), 'mono') +
+      kv('Entfernung', c.ct1(s.dist) + ' km') +
       '<div class="kv"><span class="k">Status</span><span class="stp ' + (s.isOpen ? 'open' : 'closed') + '">' + (s.isOpen ? 'Geöffnet' : 'Geschlossen') + '</span></div>' +
       openingBlock(s) + '</div>';
     $('#rcol').innerHTML = html;
@@ -94,7 +98,7 @@
   }
   function todayIdx() {
     const sec = (window.TKCLOCK && window.TKCLOCK.now) || Math.round(Date.now() / 1000);
-    return (new Date(sec * 1000).getDay() + 6) % 7; // 0=Mo … 6=So
+    return (new Date(sec * 1000).getUTCDay() + 6) % 7; // 0=Mo … 6=So (sec ist lokale Zeit als UTC kodiert)
   }
   function ohCap(badge) {
     return '<div class="oh-cap"><span class="oh-lbl">' + CLOCK_ICON + 'Öffnungszeiten</span>' + (badge || '') + '</div>';
@@ -316,7 +320,7 @@
     $$('[data-sort]').forEach(b => b.classList.toggle('active', b.dataset.sort === api.state.sort));
     if (cb && api.state.compare) { cb.classList.add('active'); const lbl = cb.querySelector('.lbl'); if (lbl) lbl.textContent = 'Vergleich beenden'; }
     // Anfangswerte fuer aria-pressed aus dem sichtbaren Aktiv-Zustand ableiten (die Schalter sind <button>).
-    $$('[data-fuel],[data-sort],[data-tf],[data-ct],[data-ind],#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.classList.contains('active') || b.classList.contains('on'))));
+    $$('[data-fuel],[data-sort],[data-tf],[data-ct],#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.classList.contains('active'))));
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => start().catch(fatalError)); else start().catch(fatalError);
 })();

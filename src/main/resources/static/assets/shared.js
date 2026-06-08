@@ -12,7 +12,9 @@
   const eur = v => v.toFixed(3).replace('.', ',') + ' €';
   const eur2 = v => v.toFixed(2).replace('.', ',') + ' €';
   const ct1 = v => v.toFixed(1).replace('.', ',');
-  const hhmm = t => new Date(t * 1000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  // Chart-Sekunden sind lokale Wanduhrzeit als UTC kodiert; daher in UTC formatieren, sonst
+  // wuerde der Browser den Zonen-Versatz ein zweites Mal aufschlagen.
+  const hhmm = t => new Date(t * 1000).toLocaleTimeString('de-DE', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' });
   // HTML-Escape fuer in Markup interpolierte API-/DB-Strings (& < > " ').
   // Verhindert, dass Werte wie Tankstellennamen das per innerHTML gebaute Markup
   // zerlegen (XSS bzw. Layout-Bruch). Reihenfolge: & zuerst.
@@ -58,7 +60,7 @@
     const state = {
       fuel: saved.fuel || adapter.fuel || 'diesel', sort: saved.sort || 'dist',
       region: null, selectedId: null, chartType: 'candle', tf: 3600,
-      indicators: new Set(), hideClosed: saved.hideClosed,
+      hideClosed: saved.hideClosed,
       compare: saved.compareOn, compareIds: saved.compareIds, loadError: false,
     };
 
@@ -145,7 +147,7 @@
       if (!seriesCache.has(s.id) && adapter.renderSelectionSkeleton) adapter.renderSelectionSkeleton(s, ctx);
       const history = await ensureHistory(s.id);
       if (g != null && g !== nav) return;
-      try { window.ChartView.render(history, { type: state.chartType, tf: state.tf, indicators: state.indicators }); } catch (e) {}
+      try { window.ChartView.render(history, { type: state.chartType, tf: state.tf }); } catch (e) {}
       adapter.renderSelection({ s, hist: history, cur: priceOf(s) }, ctx);
     }
     // Aktualisiert nur die rechte Detailspalte aus dem Cache (kein Chart-Neuaufbau) – etwa fuer
@@ -159,7 +161,7 @@
       const s = selected(); if (!s) return;
       const history = await ensureHistory(s.id);
       if (g != null && g !== nav) return;
-      try { window.ChartView.render(history, { type: state.chartType, tf: state.tf, indicators: state.indicators }); } catch (e) {}
+      try { window.ChartView.render(history, { type: state.chartType, tf: state.tf }); } catch (e) {}
     }
     async function renderCompareView(g) {
       const anyFresh = state.compareIds.some(id => !seriesCache.has(id));
@@ -298,7 +300,6 @@
       });
       $$('[data-tf]').forEach(b => b.addEventListener('click', () => { state.tf = +b.dataset.tf; markActive('[data-tf]', b); const g = ++nav; if (state.compare) renderCompareView(g); else renderChart(g); }));
       $$('[data-ct]').forEach(b => b.addEventListener('click', () => { if (state.compare) return; state.chartType = b.dataset.ct; markActive('[data-ct]', b); renderChart(++nav); }));
-      $$('[data-ind]').forEach(b => b.addEventListener('click', () => { if (state.compare) return; const k = b.dataset.ind; const on = !state.indicators.has(k); if (on) state.indicators.add(k); else state.indicators.delete(k); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); renderChart(++nav); }));
     }
 
     await loadStations();

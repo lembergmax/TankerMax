@@ -1,8 +1,8 @@
 /* ───────────────────────────────────────────────────────────────────
    Chart-Modul — TradingView-Optik via lightweight-charts v5.2.0.
    Zeichnet den Preisverlauf (Kerze/Linie/Flaeche/Balken/Heikin),
-   die Aktuellpreis-Linie, einen Crosshair-Tooltip und Indikator-Overlays
-   (SMA/EMA/Bollinger). Im Vergleichsmodus mehrere Stationen als Linien.
+   die Aktuellpreis-Linie und einen Crosshair-Tooltip.
+   Im Vergleichsmodus mehrere Stationen als Linien.
    ─────────────────────────────────────────────────────────────────── */
 (function () {
   'use strict';
@@ -14,9 +14,7 @@
     crosshair: '#58a6ff66',
   };
   const MIN = 60, HOUR = 3600, DAY = 86400;
-  // Indikator- und Sichtfenster-Konstanten (benannt statt Magic Numbers):
-  const INDICATOR_PERIOD = 20;               // Fensterbreite fuer SMA/EMA/Bollinger
-  const BOLLINGER_MULT = 2;                  // Faktor der Standardabweichung der Bollinger-Baender
+  // Sichtfenster-Konstanten (benannt statt Magic Numbers):
   const HISTORY_WINDOW_S = 2 * DAY;          // sichtbarer Verlauf links von „jetzt"
   const FUTURE_PAD_S = 30 * MIN;             // Rand rechts des letzten Punktes
 
@@ -25,10 +23,14 @@
   function esc(s) { return window.TK && window.TK.esc ? window.TK.esc(s) : String(s == null ? '' : s); }
 
   function fmtPrice(p) { return p.toFixed(3).replace('.', ',') + ' €'; }
+  // t sind Chart-Sekunden: die lokale Wanduhrzeit ist bereits als UTC kodiert (siehe ChartTime).
+  // Daher MUSS hier in UTC formatiert werden – sonst rechnet der Browser den Zonen-Versatz ein
+  // zweites Mal ein und die Uhrzeiten erscheinen um 1–2 Stunden verschoben (passt sonst auch nicht
+  // zur Zeitachse, die lightweight-charts ebenfalls in UTC beschriftet).
   function fmtTimeLabel(t) {
     const d = new Date(t * 1000);
-    return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' }) +
-      ' · ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString('de-DE', { timeZone: 'UTC', weekday: 'short', day: '2-digit', month: '2-digit' }) +
+      ' · ' + d.toLocaleTimeString('de-DE', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' });
   }
 
   // ── Aggregation ──────────────────────────────────────────────────
@@ -79,17 +81,9 @@
     return type === 'heikin' ? toHeikin(o) : o;
   }
 
-  // ── Indikator-Berechnung ─────────────────────────────────────────
-  function closes(bars) { return bars.map(b => (b.close != null ? b.close : b.value)); }
-  function SMA(bars, p) { const s = closes(bars), o = []; for (let i = p - 1; i < s.length; i++) { let sum = 0; for (let j = i - p + 1; j <= i; j++) sum += s[j]; o.push({ time: bars[i].time, value: sum / p }); } return o; }
-  function EMA(bars, p) { const s = closes(bars), o = [], k = 2 / (p + 1); let e; for (let i = 0; i < s.length; i++) { e = i === 0 ? s[0] : s[i] * k + e * (1 - k); if (i >= p - 1) o.push({ time: bars[i].time, value: e }); } return o; }
-  function BB(bars, p, mult) { const s = closes(bars), up = [], mid = [], lo = []; for (let i = p - 1; i < s.length; i++) { let sum = 0; for (let j = i - p + 1; j <= i; j++) sum += s[j]; const m = sum / p; let v = 0; for (let j = i - p + 1; j <= i; j++) v += (s[j] - m) ** 2; const sd = Math.sqrt(v / p); mid.push({ time: bars[i].time, value: m }); up.push({ time: bars[i].time, value: m + mult * sd }); lo.push({ time: bars[i].time, value: m - mult * sd }); } return { up, mid, lo }; }
-
   // ── Modulzustand ─────────────────────────────────────────────────
   let chart, mainSeries, currentPriceLine;
-  let indSeries = {};   // Overlays auf der Hauptflaeche (SMA/EMA/Bollinger)
   let el, tooltipEl, container, ro;
-  let lastBars = [];
   let compareSeries = [];
 
   function init(opts) {
@@ -106,7 +100,7 @@
       timeScale: { borderColor: C.border, timeVisible: true, secondsVisible: false, rightOffset: 6 },
       localization: {
         priceFormatter: fmtPrice,
-        timeFormatter: t => new Date(t * 1000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }),
+        timeFormatter: t => new Date(t * 1000).toLocaleTimeString('de-DE', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' }),
         locale: 'de-DE',
       },
       handleScroll: true, handleScale: true,
@@ -136,8 +130,6 @@
   }
 
   function clearAll() {
-    Object.values(indSeries).forEach(s => { try { chart.removeSeries(s); } catch (e) {} });
-    indSeries = {};
     if (mainSeries) { try { chart.removeSeries(mainSeries); } catch (e) {} }
     mainSeries = currentPriceLine = null;
     compareSeries.forEach(o => { try { chart.removeSeries(o.s); } catch (e) {} });
@@ -166,19 +158,16 @@
     requestAnimationFrame(() => requestAnimationFrame(frame));
   }
 
-  // opts (Optionen): { type, tf, indicators:Set }
+  // opts (Optionen): { type, tf }
   function render(history, opts) {
     clearAll();
     const bars = aggregateForType(history, opts.tf, opts.type);
-    lastBars = bars;
     mainSeries = addMain(opts.type);
     mainSeries.setData(bars);
 
     const cur = (history[history.length - 1] || {}).value;
     // Aktuellpreis-Linie
     if (cur != null) currentPriceLine = mainSeries.createPriceLine({ price: cur, color: C.accent, lineWidth: 1, lineStyle: LWC.LineStyle.Dashed, axisLabelVisible: true, title: 'jetzt' });
-
-    applyIndicators(opts.indicators || new Set());
 
     // Groesse setzen und den interessanten Ausschnitt rahmen, NACHDEM das Layout geflossen ist
     // (der Chart entsteht hinter der verborgenen Detailansicht und startet daher mit 0×0).
@@ -192,17 +181,6 @@
       } catch (e) { try { if (chart) chart.timeScale().fitContent(); } catch (e2) {} }
     };
     requestAnimationFrame(() => requestAnimationFrame(frame));
-  }
-
-  function applyIndicators(set) {
-    // bestehende Overlays entfernen (Bollinger-Baender bestehen aus mehreren Serien)
-    Object.entries(indSeries).forEach(([k, s]) => { if (!set.has(k) || k === 'bb') { try { chart.removeSeries(s); } catch (e) {} delete indSeries[k]; } });
-    if (indSeries.bbU) { ['bbU', 'bbL', 'bbM'].forEach(k => { try { chart.removeSeries(indSeries[k]); } catch (e) {} delete indSeries[k]; }); }
-
-    const bars = lastBars;
-    if (set.has('sma') && !indSeries.sma) { indSeries.sma = chart.addSeries(LWC.LineSeries, { color: '#fbbf24', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }); indSeries.sma.setData(SMA(bars, INDICATOR_PERIOD)); }
-    if (set.has('ema') && !indSeries.ema) { indSeries.ema = chart.addSeries(LWC.LineSeries, { color: '#34d399', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }); indSeries.ema.setData(EMA(bars, INDICATOR_PERIOD)); }
-    if (set.has('bb')) { const b = BB(bars, INDICATOR_PERIOD, BOLLINGER_MULT); const mk = c => chart.addSeries(LWC.LineSeries, { color: c, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }); indSeries.bbU = mk('rgba(79,144,255,.55)'); indSeries.bbU.setData(b.up); indSeries.bbL = mk('rgba(79,144,255,.55)'); indSeries.bbL.setData(b.lo); indSeries.bbM = mk('rgba(142,164,192,.4)'); indSeries.bbM.setData(b.mid); }
   }
 
   // ── Crosshair-Tooltip ────────────────────────────────────────────
