@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tankerkönig – Spritpreise</title>
+<title>TankerMax – Spritpreise</title>
 <link rel="stylesheet" href="neo.css">
 <script src="assets/theme-init.js"></script>
 </head>
@@ -13,7 +13,7 @@
   <header class="hdr">
     <div class="brand">
       <div class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="22" x2="15" y2="22"/><path d="M4 22V4a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v18"/><path d="M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 4 0V9l-4-4"/></svg></div>
-      <div class="brand-tx"><b>Tankerkönig</b><span>Spritpreis-Verlauf</span></div>
+      <div class="brand-tx"><b>TankerMax</b><span>Spritpreis-Verlauf</span></div>
     </div>
     <div class="region-sel">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
@@ -60,6 +60,10 @@
     </section>
   </div>
 </div>
+
+<!-- Eigene, dauerhaft vorhandene Live-Region für Kopier-Rückmeldungen (außerhalb von
+     #rcol, das bei jeder Auswahl neu aufgebaut wird; visuell verborgen, von Screenreadern angesagt). -->
+<div id="copyAnnounce" class="sr-only" role="status" aria-live="polite"></div>
 
 <script src="vendor/lightweight-charts.standalone.production.js"></script>
 <script src="assets/api.js"></script>
