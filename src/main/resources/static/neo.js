@@ -59,7 +59,7 @@
     const html = '<div class="info-card"><h3>Details</h3>' +
       kv('Marke', T.esc(s.brand)) +
       kv('Adresse', T.esc(addr || '—'), 'addr') +
-      kv('Tankstellen-ID', T.esc(s.id), 'mono') +
+      kv('Tankstellen-ID', T.esc(s.id), 'mono', 'col') +
       kv('Entfernung', c.ct1(s.dist) + ' km') +
       '<div class="kv"><span class="k">Status</span><span class="stp ' + (s.isOpen ? 'open' : 'closed') + '">' + (s.isOpen ? 'Geöffnet' : 'Geschlossen') + '</span></div>' +
       openingBlock(s) + '</div>';
@@ -180,7 +180,8 @@
     const cls = dl > 0.0005 ? 'up' : dl < -0.0005 ? 'down' : 'flat';
     return '<div class="dl ' + cls + '">' + (dl >= 0 ? '+' : '−') + c.ct1(Math.abs(dl * 100)) + ' ct seit gestern</div>';
   }
-  function kv(k, v, cls) { return '<div class="kv"><span class="k">' + k + '</span><span class="v ' + (cls || '') + '">' + v + '</span></div>'; }
+  // rowCls = 'col' stapelt Bezeichnung und Wert untereinander (Wert in eigener Zeile).
+  function kv(k, v, cls, rowCls) { return '<div class="kv ' + (rowCls || '') + '"><span class="k">' + k + '</span><span class="v ' + (cls || '') + '">' + v + '</span></div>'; }
 
   // ── Skeleton-Platzhalter waehrend des Ladens ─────────────────────
   function skLine(width, cls) {
