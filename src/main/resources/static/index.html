@@ -36,7 +36,7 @@
         <div class="sortpills"><button data-sort="price">Günstig</button><button data-sort="dist" class="active">Nähe</button></div>
       </div>
       <label class="list-filter"><input type="checkbox" id="hideClosed"><span>Geschlossene ausblenden</span></label>
-      <div class="list" id="list"></div>
+      <div class="list" id="list" role="status" aria-live="polite" aria-busy="false"></div>
     </section>
 
     <section class="col detail">
@@ -56,7 +56,7 @@
             <div class="chart-tooltip" id="chartTooltip"></div>
           </div>
         </div>
-        <div class="rcol" id="rcol"></div>
+        <div class="rcol" id="rcol" role="status" aria-live="polite"></div>
       </div>
     </section>
   </div>

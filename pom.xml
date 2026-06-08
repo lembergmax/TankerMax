@@ -49,6 +49,26 @@
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
 
+        <!-- Actuator + Micrometer: maschinenlesbarer Gesundheitsstatus (/actuator/health) und
+             Kennzahlen (/actuator/metrics) fuer die Beobachtbarkeit des Ingest. Die HTTP-Endpunkte
+             stehen nur bereit, wenn der eingebettete Web-Server laeuft (Profil "web"); ein reiner
+             "ingest"-Lauf bleibt kopflos und nutzt weiterhin die Protokollausgaben. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Serverseitiges Caching der Lese-Endpunkte mit kurzer Lebensdauer (Caffeine als
+             Cache-Anbieter), da sich die Daten nur im Poll-Takt aendern. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.mariadb.jdbc</groupId>
             <artifactId>mariadb-java-client</artifactId>
@@ -138,6 +158,46 @@
                                 </path>
                             </annotationProcessorPaths>
                         </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Trennt schnelle Unit-Tests (Surefire, Phase test) von den langsamen,
+                 Docker-gestuetzten Integrationstests (Failsafe, Phase verify). Failsafe erkennt
+                 Klassen, deren Name auf "IT" endet, sodass "mvn test" ohne Container schnell bleibt
+                 und die Integrationstests erst bei "mvn verify" laufen. Die Version verwaltet die
+                 Spring-Boot-Eltern-POM. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Misst die Testabdeckung (Coverage) und erzeugt nach den Tests einen Bericht
+                 unter target/site/jacoco. Die Version verwaltet die Spring-Boot-Eltern-POM. -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
                     </execution>
                 </executions>
             </plugin>

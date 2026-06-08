@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -130,25 +131,39 @@ public class StationDetailEnrichmentService {
     /**
      * Reichert die offenen Tankstellen stapelweise an, bis keine mehr offen sind
      * oder ein Fehler auftritt, und protokolliert nach jeder Tankstelle den Fortschritt.
+     *
+     * <p>Die Stapel werden nach aufsteigender Fehlversuchszahl geladen, sodass bislang fehlerfreie
+     * Tankstellen zuerst und dauerhaft fehlschlagende zuletzt verarbeitet werden. Schlägt ein
+     * Detailabruf mit einer Ausnahme fehl, wird der Fehlversuch der betroffenen Tankstelle vermerkt
+     * (und sie nach Erreichen der Höchstzahl aufgegeben) und der Lauf abgebrochen, um im nächsten
+     * Durchgang fortzusetzen. Dank der Sortierung wurden die fehlerfreien Tankstellen des Stapels da
+     * bereits angereichert, sodass eine einzelne nicht abrufbare Tankstelle die übrigen nicht mehr
+     * blockiert.</p>
      */
     private void drainPendingStations() {
+        final int maxAttempts = properties.getEnrichment().getMaxDetailFetchAttempts();
         while (true) {
             final List<Station> pendingStations = stationRepository.findByDetailsFetchedAtIsNull(
-                    PageRequest.of(0, properties.getEnrichment().getBatchSize()));
+                    PageRequest.of(0, properties.getEnrichment().getBatchSize(),
+                            Sort.by(Sort.Direction.ASC, "detailFetchFailures")));
             if (pendingStations.isEmpty()) {
                 return;
             }
-            try {
-                for (final Station station : pendingStations) {
-                    final boolean enriched = enrichStation(station.getId());
-                    if (enriched) {
-                        preparationEnrichedCount++;
-                    }
-                    logStationProgress(station, enriched);
+            for (final Station station : pendingStations) {
+                final boolean enriched;
+                try {
+                    enriched = enrichStation(station.getId());
+                } catch (final RuntimeException ex) {
+                    stationCatalogService.recordDetailFetchFailure(station.getId(), maxAttempts);
+                    LOG.warn("Detailabruf für Tankstelle '{}' fehlgeschlagen ({}. Fehlversuch), Anreicherung "
+                                    + "abgebrochen und im nächsten Lauf fortgesetzt: {}",
+                            station.getId(), station.getDetailFetchFailures() + 1, ex.getMessage());
+                    return;
                 }
-            } catch (final RuntimeException ex) {
-                LOG.warn("Anreicherung nach Fehler abgebrochen: {}", ex.getMessage());
-                return;
+                if (enriched) {
+                    preparationEnrichedCount++;
+                }
+                logStationProgress(station, enriched);
             }
         }
     }

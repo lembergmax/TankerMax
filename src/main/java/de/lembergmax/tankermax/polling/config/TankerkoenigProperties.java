@@ -75,6 +75,23 @@ public class TankerkoenigProperties {
         /** Zeitlimit in Millisekunden für das Lesen der API-Antwort. */
         @Positive
         private int readTimeoutMs = 15_000;
+
+        /**
+         * Höchstzahl der Versuche je API-Aufruf bei einem transienten Fehler (Verbindungs- oder
+         * Lese-Timeout). Bei {@code 1} findet kein erneuter Versuch statt; jeder weitere Versuch
+         * läuft erneut durch den Ratenbegrenzer und wartet zuvor die wachsende Backoff-Pause ab.
+         * Ratenlimit-Antworten (HTTP 503/429) werden bewusst nicht erneut versucht.
+         */
+        @Min(1)
+        private int maxAttempts = 3;
+
+        /**
+         * Grund-Wartezeit in Millisekunden vor dem ersten erneuten Versuch; sie verdoppelt sich mit
+         * jedem weiteren Versuch (Exponential Backoff, etwa 1 s, 2 s, 4 s), damit eine kurz gestörte
+         * Gegenstelle nicht sofort erneut belastet wird.
+         */
+        @Positive
+        private long retryBackoffMs = 1_000;
     }
 
     /**
@@ -104,6 +121,15 @@ public class TankerkoenigProperties {
          */
         @Min(1)
         private int maxStallCycles = 5;
+
+        /**
+         * Zeitspanne in Millisekunden ohne erfolgreiche Preisabfrage, nach deren Überschreitung der
+         * Gesundheitsstatus des Ingest auf {@code DOWN} wechselt. Großzügig über dem Abfrageabstand
+         * gewählt, damit ein einzelner ausgelassener Zyklus (etwa wegen der Vorbereitungsphase)
+         * keinen Fehlalarm auslöst.
+         */
+        @Positive
+        private long healthStaleThresholdMs = 1_800_000;
     }
 
     /**
@@ -124,6 +150,15 @@ public class TankerkoenigProperties {
         /** Anzahl der Tankstellen, die je Anreicherungslauf um Detaildaten ergänzt werden. */
         @Min(1)
         private int batchSize = 10;
+
+        /**
+         * Höchstzahl aufeinanderfolgender Fehlversuche je Tankstelle beim Detailabruf. Erst danach
+         * gilt die Tankstelle als endgültig nicht abrufbar und wird als geprüft markiert, damit eine
+         * einzelne dauerhaft nicht erreichbare Tankstelle die Vorbereitungsphase nicht unbegrenzt
+         * blockiert. Ein kurzer Aussetzer unterhalb dieser Schwelle markiert die Tankstelle nicht.
+         */
+        @Min(1)
+        private int maxDetailFetchAttempts = 5;
     }
 
 }

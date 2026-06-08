@@ -8,6 +8,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -26,13 +27,21 @@ import java.time.Instant;
  * <p>Je Tankstelle und Abfragezeitpunkt darf es nur eine Beobachtung geben; die
  * Eindeutigkeitsbedingung auf {@code (station_id, observed_at)} verhindert Doubletten
  * und dient zugleich als Index für zeitlich sortierte Verlaufsabfragen.</p>
+ *
+ * <p>Der zusätzliche Index auf {@code (status, observed_at)} beschleunigt die Dashboard-Abfragen,
+ * die nach geöffneten Beobachtungen filtern und über den Beobachtungszeitpunkt eingrenzen oder
+ * sortieren; ohne ihn müsste die mit jedem Pollzyklus wachsende Tabelle dafür vollständig gelesen
+ * werden.</p>
  */
 @Entity
 @Table(
         name = "price_observation",
         uniqueConstraints = @UniqueConstraint(
                 name = "uq_observation_station_time",
-                columnNames = {"station_id", "observed_at"})
+                columnNames = {"station_id", "observed_at"}),
+        indexes = @Index(
+                name = "idx_observation_status_time",
+                columnList = "status, observed_at")
 )
 @Getter
 @Setter

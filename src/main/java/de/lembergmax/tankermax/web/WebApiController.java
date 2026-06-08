@@ -4,6 +4,7 @@ import de.lembergmax.tankermax.web.dto.MetaDto;
 import de.lembergmax.tankermax.web.dto.PointDto;
 import de.lembergmax.tankermax.web.dto.RegionDto;
 import de.lembergmax.tankermax.web.dto.StationDto;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
@@ -64,7 +65,7 @@ public class WebApiController {
      * @return Liste der Tankstellen
      */
     @GetMapping("/stations")
-    public List<StationDto> stations(@RequestParam @Size(max = MAX_IDENTIFIER_LENGTH) final String region,
+    public List<StationDto> stations(@RequestParam @NotBlank @Size(max = MAX_IDENTIFIER_LENGTH) final String region,
                                      @RequestParam final String fuel,
                                      @RequestParam(defaultValue = "false") final boolean openOnly) {
         return stationService.stations(region, requireKnownFuel(fuel), openOnly);
@@ -78,7 +79,7 @@ public class WebApiController {
      * @return Ist-Preiskurve
      */
     @GetMapping("/history")
-    public List<PointDto> history(@RequestParam @Size(max = MAX_IDENTIFIER_LENGTH) final String station,
+    public List<PointDto> history(@RequestParam @NotBlank @Size(max = MAX_IDENTIFIER_LENGTH) final String station,
                                   @RequestParam final String fuel) {
         return stationService.history(station, requireKnownFuel(fuel));
     }

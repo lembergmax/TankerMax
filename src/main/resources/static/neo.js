@@ -5,6 +5,10 @@
   const $ = s => root.querySelector(s);
   const $$ = s => Array.from(root.querySelectorAll(s));
 
+  // Lade-Signal fuer assistive Technik: setzt aria-busy auf der Live-Region, damit ein Screenreader
+  // den Wechsel von Ladeplatzhalter zu Inhalt bzw. den Fehler-/Leerzustand korrekt ansagt.
+  function setBusy(sel, on) { const el = $(sel); if (el) el.setAttribute('aria-busy', on ? 'true' : 'false'); }
+
   // Chart-Palette aus den CSS-Variablen ableiten (Single Source: nur neo.css pflegen).
   // Wird nach dem Setzen von data-theme gelesen, damit Hell/Dunkel korrekt greifen.
   const CHART_TOKENS = { bg: '--chart-bg', grid: '--chart-grid', text: '--chart-text', border: '--chart-border', up: '--chart-up', down: '--chart-down', accent: '--chart-accent', accentSoft: '--chart-accent-soft', crosshair: '--chart-crosshair', crosshairLabel: '--chart-crosshair-label' };
@@ -37,6 +41,7 @@
     }).join('');
     if (listEl) listEl.scrollTop = scrollTop;
     if (focusedId && listEl) { const again = listEl.querySelector('.scard[data-id="' + (window.CSS && CSS.escape ? CSS.escape(focusedId) : focusedId) + '"]'); if (again) again.focus(); }
+    setBusy('#list', false);
   }
 
   // ── single selection ─────────────────────────────────────────────
@@ -53,20 +58,76 @@
     const html = '<div class="info-card"><h3>Details</h3>' +
       kv('Marke', T.esc(s.brand)) + kv('Entfernung', c.ct1(s.dist) + ' km') +
       '<div class="kv"><span class="k">Status</span><span class="stp ' + (s.isOpen ? 'open' : 'closed') + '">' + (s.isOpen ? 'Geöffnet' : 'Geschlossen') + '</span></div>' +
-      kv('Öffnungszeiten', openingHours(s)) + '</div>';
+      openingBlock(s) + '</div>';
     $('#rcol').innerHTML = html;
   }
 
-  // Öffnungszeiten als HTML: 24h-Betrieb, sonst die echten Zeiten je Tagesbereich,
-  // Fallback „Nach Aushang" nur, wenn keine angereicherten Daten vorliegen.
-  function openingHours(s) {
-    if (s.wholeDay) return '24 Stunden';
-    const times = s.openingTimes || [];
-    if (!times.length) return 'Nach Aushang';
-    return times.map(function (o) {
-      const span = (o.open && o.close) ? ' ' + T.esc(o.open) + '–' + T.esc(o.close) : '';
-      return T.esc(o.days) + span;
-    }).join('<br>');
+  // ── Öffnungszeiten ───────────────────────────────────────────────
+  // Strukturierte Darstellung statt eines einzeiligen kv-Werts: je Tagesbereich eine
+  // eigene Zeile (Tag links, Zeitspanne rechts), der heutige Tag hervorgehoben, plus eine
+  // Kopf-Badge mit dem aktuellen Status. 24h und fehlende Daten erhalten eigene Layouts.
+  const CLOCK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>';
+  const DAY_TOKENS = { mo: 0, montag: 0, di: 1, die: 1, dienstag: 1, mi: 2, mittwoch: 2, do: 3, don: 3, donnerstag: 3, fr: 4, freitag: 4, sa: 5, samstag: 5, so: 6, son: 6, sonntag: 6 };
+
+  // Wandelt eine Tagesbeschreibung („Mo-Fr", „Sa", „täglich" …) in die Menge der abgedeckten
+  // Wochentage (0=Mo … 6=So). Best-effort: bei unklarer Angabe null → kein Heute-Highlight.
+  function parseDays(desc) {
+    if (!desc) return null;
+    const t = String(desc).toLowerCase().replace(/[–—]/g, '-').replace(/\s*-\s*/g, '-').replace(/feiertage?/g, '').trim();
+    const set = new Set();
+    const add = (a, b) => { if (b == null) b = a; for (let i = a; i <= b; i++) set.add(((i % 7) + 7) % 7); };
+    if (/(täglich|taeglich|durchgehend|alle tage|jeden tag|\btgl\b)/.test(t)) { add(0, 6); return set; }
+    if (/(wochentags|werktags|unter der woche)/.test(t)) add(0, 4);
+    if (/wochenende/.test(t)) add(5, 6);
+    t.split(/[,+/&]|\bund\b|\bu\.\b/).forEach(part => {
+      part = part.trim();
+      const range = part.match(/^([a-zä]+)-([a-zä]+)$/);
+      if (range && DAY_TOKENS[range[1]] != null && DAY_TOKENS[range[2]] != null) {
+        let a = DAY_TOKENS[range[1]], b = DAY_TOKENS[range[2]];
+        if (b < a) b += 7;
+        add(a, b);
+      } else if (DAY_TOKENS[part] != null) {
+        add(DAY_TOKENS[part]);
+      }
+    });
+    return set.size ? set : null;
+  }
+  function todayIdx() {
+    const sec = (window.TKCLOCK && window.TKCLOCK.now) || Math.round(Date.now() / 1000);
+    return (new Date(sec * 1000).getDay() + 6) % 7; // 0=Mo … 6=So
+  }
+  function ohCap(badge) {
+    return '<div class="oh-cap"><span class="oh-lbl">' + CLOCK_ICON + 'Öffnungszeiten</span>' + (badge || '') + '</div>';
+  }
+  function openingBlock(s) {
+    // 24-Stunden-Betrieb: eigene, deutlich lesbare Karte.
+    if (s.wholeDay) {
+      return '<div class="oh">' + ohCap('') +
+        '<div class="oh-24"><span class="oh-24-ic">' + CLOCK_ICON + '</span>' +
+        '<span class="oh-24-tx"><span class="t1">Durchgehend geöffnet</span><span class="t2">Rund um die Uhr · 7 Tage die Woche</span></span></div></div>';
+    }
+    const times = (s.openingTimes || []).filter(Boolean);
+    if (!times.length) {
+      return '<div class="oh">' + ohCap('') + '<div class="oh-note">Keine Zeiten hinterlegt · nach Aushang</div></div>';
+    }
+    const today = todayIdx();
+    let todayClose = null, todayOpen = null;
+    const rows = times.map(o => {
+      const days = parseDays(o.days);
+      const isToday = !!(days && days.has(today));
+      if (isToday) { if (o.close) todayClose = o.close; if (o.open) todayOpen = o.open; }
+      const time = (o.open && o.close) ? T.esc(o.open) + '–' + T.esc(o.close)
+        : (o.open ? 'ab ' + T.esc(o.open) : (o.close ? 'bis ' + T.esc(o.close) : 'nach Aushang'));
+      return '<div class="oh-row' + (isToday ? ' today' : '') + '">' +
+        '<span class="oh-day">' + T.esc(o.days) + '</span>' +
+        '<span class="oh-rt">' + (isToday ? '<span class="oh-now">Heute</span>' : '') +
+        '<span class="oh-time">' + time + '</span></span></div>';
+    }).join('');
+    // Kopf-Badge: nutzt den verbindlichen isOpen-Status plus die heutige Schluss-/Öffnungszeit.
+    const badge = s.isOpen
+      ? '<span class="oh-badge open">Geöffnet' + (todayClose ? ' · bis ' + T.esc(todayClose) : '') + '</span>'
+      : '<span class="oh-badge closed">Geschlossen' + (todayOpen ? ' · ab ' + T.esc(todayOpen) : '') + '</span>';
+    return '<div class="oh">' + ohCap(badge) + '<div class="oh-sched">' + rows + '</div></div>';
   }
 
   function renderTiles(d, c) {
@@ -135,6 +196,7 @@
         '<div class="sk sk-price"></div></div></div>';
     }
     $('#list').innerHTML = html;
+    setBusy('#list', true);
   }
   function renderSelectionSkeleton() {
     chartLoading(true);
@@ -172,6 +234,7 @@
     $('#dhead').innerHTML = '';
     const t = $('#tiles'); if (t) t.style.display = 'none';
     $('#rcol').innerHTML = stateView(WARN_ICON, title, 'Bitte Verbindung prüfen und erneut versuchen.', 'Erneut versuchen');
+    setBusy('#list', false);
     $$('[data-retry]').forEach(b => b.addEventListener('click', () => { if (typeof retry === 'function') retry(); }));
   }
   // Keine Tankstellen (leere Region): freundlicher Leerzustand statt leerem Detail.
@@ -181,6 +244,7 @@
     $('#dhead').innerHTML = '';
     const t = $('#tiles'); if (t) t.style.display = 'none';
     $('#rcol').innerHTML = stateView(EMPTY_ICON, 'Keine Auswahl', 'Sobald Daten vorliegen, erscheinen hier die Details.', '');
+    setBusy('#list', false);
   }
   // Letzte Sicherung: schlaegt die Initialisierung fehl (z. B. Chart-Bibliothek nicht geladen oder
   // ein unerwarteter Fehler in start/makeDashboard), zeigt die App statt einer weissen Seite einen
@@ -192,6 +256,7 @@
       const list = $('#list'); if (list) list.innerHTML = html;
       const rcol = $('#rcol'); if (rcol) rcol.innerHTML = html;
       const dh = $('#dhead'); if (dh) dh.innerHTML = '';
+      setBusy('#list', false);
       $$('[data-retry]').forEach(b => b.addEventListener('click', () => location.reload()));
     } catch (e) {}
   }

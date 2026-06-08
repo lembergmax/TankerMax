@@ -16,13 +16,14 @@ import org.testcontainers.mariadb.MariaDBContainer;
  * per {@code ddl-auto=update} aus den Entitäten anlegt und beide Bean-Graphen (Erfassung und
  * Web) gemeinsam fehlerfrei laden.
  *
- * <p>Ohne laufenden Docker-Daemon wird der Test übersprungen ({@code disabledWithoutDocker}),
- * sodass lokale Builds ohne Docker dennoch grün sind; in der CI mit Docker läuft er.</p>
+ * <p>Als {@code *IT} benannt, sodass die langsame, Docker-gestützte Prüfung über das
+ * Failsafe-Plugin erst bei {@code mvn verify} läuft und {@code mvn test} schnell bleibt. Ohne
+ * laufenden Docker-Daemon wird der Test übersprungen ({@code disabledWithoutDocker}).</p>
  */
 @SpringBootTest
 @ActiveProfiles({"web", "ingest"})
 @Testcontainers(disabledWithoutDocker = true)
-class TankerMaxApplicationTests {
+class TankerMaxApplicationIT {
 
     /** Wegwerf-MariaDB; die Verbindungsdaten werden via {@link ServiceConnection} eingespeist. */
     @Container

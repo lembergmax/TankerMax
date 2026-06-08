@@ -6,6 +6,8 @@ import de.lembergmax.tankermax.polling.client.dto.StationListResponse;
 import de.lembergmax.tankermax.polling.config.Location;
 import de.lembergmax.tankermax.polling.config.TankerkoenigProperties;
 import de.lembergmax.tankermax.polling.repository.StationRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
@@ -15,7 +17,9 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -63,6 +67,18 @@ public class LocationPricePollService {
     /** Höchstzahl aufeinanderfolgender Pausenzyklen ohne Anreicherungsfortschritt, danach wird die Preisabfrage erzwungen. */
     private final int maxStallCycles;
 
+    /** Zähler der erfolgreich erfassten Tankstellen, für die Metriken. */
+    private final Counter recordedCounter;
+
+    /** Zähler der nicht erfassbaren Tankstellen, für die Metriken. */
+    private final Counter failedCounter;
+
+    /** Zähler der erzwungenen Fortsetzungen wegen blockierter Anreicherung, für die Metriken. */
+    private final Counter enrichmentStallCounter;
+
+    /** Zeitpunkt der letzten erfolgreichen Preisabfrage; {@code null}, solange noch keine erfolgte. */
+    private volatile Instant lastSuccessfulPollAt;
+
     /** Merkt, ob die Preisabfrage wegen der laufenden Vorbereitungsphase pausiert, um wiederholte Pausenmeldungen zu vermeiden. */
     private boolean pricePollingPaused;
 
@@ -84,13 +100,15 @@ public class LocationPricePollService {
      * @param stationRepository     Repository für Tankstellen
      * @param properties            Konfiguration mit Orten und Höchstzahl
      * @param transactionManager    Transaktionsverwaltung für das atomare Speichern je Tankstelle
+     * @param meterRegistry         Registry für die Erfassungs- und Stillstandskennzahlen
      */
     public LocationPricePollService(final TankerkoenigApiClient apiClient,
                                     final StationCatalogService stationCatalogService,
                                     final PriceRecordingService priceRecordingService,
                                     final StationRepository stationRepository,
                                     final TankerkoenigProperties properties,
-                                    final PlatformTransactionManager transactionManager) {
+                                    final PlatformTransactionManager transactionManager,
+                                    final MeterRegistry meterRegistry) {
         this.apiClient = apiClient;
         this.stationCatalogService = stationCatalogService;
         this.priceRecordingService = priceRecordingService;
@@ -98,6 +116,18 @@ public class LocationPricePollService {
         this.locations = limitLocations(properties.getLocations(), properties.getPoll().getMaxLocations());
         this.txTemplate = new TransactionTemplate(transactionManager);
         this.maxStallCycles = properties.getPoll().getMaxStallCycles();
+        this.recordedCounter = meterRegistry.counter("tankermax.stations.recorded");
+        this.failedCounter = meterRegistry.counter("tankermax.stations.failed");
+        this.enrichmentStallCounter = meterRegistry.counter("tankermax.enrichment.stalls");
+    }
+
+    /**
+     * Liefert den Zeitpunkt der letzten erfolgreichen Preisabfrage für die Gesundheitsprüfung.
+     *
+     * @return Zeitpunkt der letzten erfolgreichen Abfrage oder {@code null}, solange noch keine erfolgte
+     */
+    public Instant getLastSuccessfulPollAt() {
+        return lastSuccessfulPollAt;
     }
 
     /**
@@ -204,6 +234,7 @@ public class LocationPricePollService {
             LOG.warn("Detail-Anreicherung kommt seit {} Zyklen nicht voran ({} offen); Preisabfrage wird fortgesetzt.",
                     stallCycles, pending);
             stallWarned = true;
+            enrichmentStallCounter.increment();
         }
         return true;
     }
@@ -216,6 +247,11 @@ public class LocationPricePollService {
      * Eindeutigkeitsverletzung) nur diese Tankstelle überspringt und nicht den Rest
      * des Laufs verwirft.</p>
      *
+     * <p>Mehrfach in derselben Antwort enthaltene Tankstellen werden vorab nach Kennung
+     * entdoppelt, da sie sonst beim zweiten Auftreten gegen die Eindeutigkeitsbedingung
+     * {@code (station_id, observed_at)} liefen und die Fehlerzahl mit harmlosen Doubletten
+     * verschmutzen würden.</p>
+     *
      * @param location abzufragender Ort
      */
     private void pollLocation(final Location location) {
@@ -225,15 +261,34 @@ public class LocationPricePollService {
             return;
         }
         final Instant observedAt = Instant.now();
-        final List<StationListItem> stations = response.getStations();
+        final List<StationListItem> stations = deduplicateById(response.getStations());
         int failed = 0;
         for (final StationListItem item : stations) {
-            if (!recordStation(item, observedAt)) {
+            if (recordStation(item, observedAt)) {
+                recordedCounter.increment();
+            } else {
                 failed++;
             }
         }
+        failedCounter.increment(failed);
+        lastSuccessfulPollAt = Instant.now();
         LOG.info("Ort '{}': {} Tankstellen abgefragt, {} erfasst, {} fehlgeschlagen.",
                 location.getName(), stations.size(), stations.size() - failed, failed);
+    }
+
+    /**
+     * Entfernt mehrfach auftretende Tankstellen einer Antwort anhand ihrer Kennung und behält dabei
+     * das jeweils erste Auftreten in der ursprünglichen Reihenfolge.
+     *
+     * @param stations Tankstellen der Antwort, möglicherweise mit Doubletten
+     * @return Tankstellen ohne Doubletten in Reihenfolge des ersten Auftretens
+     */
+    private static List<StationListItem> deduplicateById(final List<StationListItem> stations) {
+        final Map<String, StationListItem> uniqueById = new LinkedHashMap<>();
+        for (final StationListItem item : stations) {
+            uniqueById.putIfAbsent(item.getId(), item);
+        }
+        return List.copyOf(uniqueById.values());
     }
 
     /**

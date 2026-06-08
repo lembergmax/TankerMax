@@ -4,7 +4,8 @@ import de.lembergmax.tankermax.polling.client.dto.StationDetailResponse;
 import de.lembergmax.tankermax.polling.client.dto.StationListResponse;
 import de.lembergmax.tankermax.polling.config.Location;
 import de.lembergmax.tankermax.polling.config.TankerkoenigProperties;
-import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpStatusCodeException;
@@ -18,10 +19,14 @@ import java.util.function.Supplier;
  *
  * <p>Jeder Aufruf wird über den {@link TankerkoenigRateLimiter} geführt, sodass
  * das Ratenlimit der API über alle Endpunkte und Threads hinweg eingehalten wird.</p>
+ *
+ * <p>Ein transienter Fehler (Verbindungs- oder Lese-Timeout) wird bis zur konfigurierten Höchstzahl
+ * mit wachsender Backoff-Pause erneut versucht; jeder Versuch läuft erneut durch den Ratenbegrenzer.
+ * Die Sperrpause wird erst beim endgültigen Scheitern verhängt, damit ein einzelner Aussetzer, der
+ * sich beim erneuten Versuch erledigt, nicht unnötig alle Aufrufe drosselt.</p>
  */
 @Component
 @Profile("ingest")
-@RequiredArgsConstructor
 public class TankerkoenigApiClient {
 
     /** Sortierung der Umkreissuche nach Entfernung. */
@@ -41,6 +46,39 @@ public class TankerkoenigApiClient {
 
     /** Globaler Ratenbegrenzer für alle API-Aufrufe. */
     private final TankerkoenigRateLimiter rateLimiter;
+
+    /** Höchstzahl der Versuche je Aufruf bei transienten Fehlern. */
+    private final int maxAttempts;
+
+    /** Grund-Wartezeit in Millisekunden vor dem ersten erneuten Versuch (verdoppelt sich danach). */
+    private final long retryBackoffMs;
+
+    /** Zähler der ausgelösten Sperrpausen (Ratenlimit oder endgültiges Timeout), für die Metriken. */
+    private final Counter rateLimitCounter;
+
+    /** Zähler der erneuten Versuche nach transienten Fehlern, für die Metriken. */
+    private final Counter retryCounter;
+
+    /**
+     * Erzeugt den API-Client und richtet die Wiederholungsparameter und Kennzahlen ein.
+     *
+     * @param restClient    vorkonfigurierter HTTP-Client mit der Basis-URL der API
+     * @param properties    Konfiguration mit API-Schlüssel und Wiederholungsparametern
+     * @param rateLimiter   globaler Ratenbegrenzer für alle API-Aufrufe
+     * @param meterRegistry Registry für die Ratenlimit- und Wiederholungskennzahlen
+     */
+    public TankerkoenigApiClient(final RestClient restClient,
+                                 final TankerkoenigProperties properties,
+                                 final TankerkoenigRateLimiter rateLimiter,
+                                 final MeterRegistry meterRegistry) {
+        this.restClient = restClient;
+        this.properties = properties;
+        this.rateLimiter = rateLimiter;
+        this.maxAttempts = properties.getApi().getMaxAttempts();
+        this.retryBackoffMs = properties.getApi().getRetryBackoffMs();
+        this.rateLimitCounter = meterRegistry.counter("tankermax.api.ratelimit");
+        this.retryCounter = meterRegistry.counter("tankermax.api.retry");
+    }
 
     /**
      * Ruft alle Tankstellen samt aktueller Preise innerhalb eines Ortes ab.
@@ -81,32 +119,63 @@ public class TankerkoenigApiClient {
     }
 
     /**
-     * Führt einen API-Aufruf nach Einhaltung der Drosselung aus und verhängt eine
-     * Sperrpause, wenn die API ein Ratenlimit signalisiert.
+     * Führt einen API-Aufruf nach Einhaltung der Drosselung aus, wiederholt ihn bei einem
+     * transienten Fehler und verhängt eine Sperrpause, wenn die API ein Ratenlimit signalisiert
+     * oder der Aufruf endgültig an einem Timeout scheitert.
      *
-     * <p>Eine Ratenlimit-Antwort ({@link HttpStatusCodeException} mit HTTP 503/429)
-     * sowie ein Verbindungs- oder Lese-Timeout ({@link ResourceAccessException}) lösen
-     * die Sperrpause aus. Letzteres ist im Tankerkönig-Kontext die wahrscheinlichste
-     * Erscheinungsform einer aktiven IP-Sperre, die sich laut API-Verhalten als Timeout
-     * statt als HTTP-Fehler äußert. Die ursprüngliche Ausnahme wird in beiden Fällen
-     * weitergereicht, damit der aufrufende {@code @Scheduled}-Lauf sie behandeln kann.</p>
+     * <p>Ein Verbindungs- oder Lese-Timeout ({@link ResourceAccessException}) gilt als transient und
+     * wird bis zur Höchstzahl der Versuche mit wachsender Backoff-Pause erneut versucht; erst beim
+     * letzten Versuch wird die Sperrpause verhängt. Ein Timeout ist im Tankerkönig-Kontext die
+     * wahrscheinlichste Erscheinungsform einer aktiven IP-Sperre, die sich als Timeout statt als
+     * HTTP-Fehler äußert. Eine Ratenlimit-Antwort ({@link HttpStatusCodeException} mit HTTP 503/429)
+     * wird hingegen nicht erneut versucht, sondern löst sofort die Sperrpause aus. Übrige
+     * HTTP-Fehler (etwa 400/500) werden unverändert weitergereicht.</p>
      *
      * @param apiCall auszuführender API-Aufruf
      * @param <T>     Typ der Antwort
      * @return Ergebnis des API-Aufrufs
      */
     private <T> T execute(final Supplier<T> apiCall) {
-        rateLimiter.awaitSlot();
-        try {
-            return apiCall.get();
-        } catch (final ResourceAccessException ex) {
-            rateLimiter.penalize();
-            throw ex;
-        } catch (final HttpStatusCodeException ex) {
-            if (isRateLimited(ex)) {
-                rateLimiter.penalize();
+        int attempt = 1;
+        while (true) {
+            rateLimiter.awaitSlot();
+            try {
+                return apiCall.get();
+            } catch (final ResourceAccessException ex) {
+                if (attempt >= maxAttempts) {
+                    rateLimiter.penalize();
+                    rateLimitCounter.increment();
+                    throw ex;
+                }
+                retryCounter.increment();
+                backoffBeforeRetry(attempt);
+                attempt++;
+            } catch (final HttpStatusCodeException ex) {
+                if (isRateLimited(ex)) {
+                    rateLimiter.penalize();
+                    rateLimitCounter.increment();
+                }
+                throw ex;
             }
-            throw ex;
+        }
+    }
+
+    /**
+     * Wartet vor einem erneuten Versuch die mit jedem Versuch wachsende Backoff-Pause ab.
+     *
+     * <p>Wird der Thread während des Wartens unterbrochen (etwa beim Herunterfahren), wird der
+     * Unterbrechungsstatus wiederhergestellt und der Aufruf abgebrochen.</p>
+     *
+     * @param attempt bisheriger Versuch (beginnend bei 1), bestimmt die Länge der Pause
+     * @throws IllegalStateException wenn das Warten unterbrochen wurde
+     */
+    private void backoffBeforeRetry(final int attempt) {
+        final long waitMillis = retryBackoffMs * (1L << (attempt - 1));
+        try {
+            Thread.sleep(waitMillis);
+        } catch (final InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Backoff-Wartezeit vor erneutem API-Versuch wurde unterbrochen.", ex);
         }
     }
 

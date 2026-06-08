@@ -1,5 +1,6 @@
 package de.lembergmax.tankermax.web;
 
+import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
@@ -37,6 +38,20 @@ public class WebApiExceptionHandler extends ResponseEntityExceptionHandler {
     public ProblemDetail handleBadRequest(final IllegalArgumentException ex) {
         LOG.debug("Ungültige Anfrage: {}", ex.getMessage());
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    /**
+     * Beantwortet verletzte Parameterbedingungen aus der Methodenvalidierung (etwa ein leerer oder zu
+     * langer Region-/Tankstellenparameter) mit HTTP&nbsp;400, statt sie als unerwarteten Fehler
+     * durchschlagen zu lassen.
+     *
+     * @param ex die ausgelöste Validierungsausnahme
+     * @return Fehlerbeschreibung mit Status 400
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ProblemDetail handleConstraintViolation(final ConstraintViolationException ex) {
+        LOG.debug("Ungültige Anfrageparameter: {}", ex.getMessage());
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Ungültige Anfrageparameter.");
     }
 
     /**

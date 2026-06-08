@@ -1,9 +1,11 @@
 package de.lembergmax.tankermax.web;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -12,6 +14,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -82,6 +85,81 @@ class WebApiControllerTest {
         mvc.perform(get("/api/stations").param("region", "Dresden").param("fuel", "diesel").param("openOnly", "true"))
                 .andExpect(status().isOk());
         verify(stationService).stations("Dresden", "DIESEL", true);
+    }
+
+    /**
+     * Ein fehlgeschlagener Datenbankzugriff wird als HTTP&nbsp;503 beantwortet.
+     *
+     * @throws Exception wenn die Anfrage fehlschlägt
+     */
+    @Test
+    void datenbankausfallErgibt503() throws Exception {
+        when(stationService.regions()).thenThrow(new DataAccessResourceFailureException("DB weg"));
+        mvc.perform(get("/api/regions"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.detail").value("Datenbank momentan nicht erreichbar."));
+    }
+
+    /**
+     * Ein unerwarteter Fehler wird als bereinigte HTTP&nbsp;500-Meldung ohne interne Details
+     * beantwortet.
+     *
+     * @throws Exception wenn die Anfrage fehlschlägt
+     */
+    @Test
+    void unerwarteterFehlerErgibt500OhneInterneDetails() throws Exception {
+        when(stationService.regions()).thenThrow(new RuntimeException("geheimer Stacktrace-Hinweis"));
+        mvc.perform(get("/api/regions"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.detail").value("Interner Fehler bei der Verarbeitung der Anfrage."))
+                .andExpect(content().string(not(containsString("geheimer Stacktrace-Hinweis"))));
+    }
+
+    /**
+     * Ein fehlender Pflichtparameter ({@code region}) wird mit HTTP&nbsp;400 abgelehnt.
+     *
+     * @throws Exception wenn die Anfrage fehlschlägt
+     */
+    @Test
+    void fehlendeRegionErgibt400() throws Exception {
+        mvc.perform(get("/api/stations").param("fuel", "diesel"))
+                .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * Eine leere Region wird durch {@code @NotBlank} mit HTTP&nbsp;400 abgelehnt.
+     *
+     * @throws Exception wenn die Anfrage fehlschlägt
+     */
+    @Test
+    void leereRegionErgibt400() throws Exception {
+        mvc.perform(get("/api/stations").param("region", "").param("fuel", "diesel"))
+                .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * {@code GET /api/meta} liefert Status 200 mit Zeitzone und Chart-Zeit.
+     *
+     * @throws Exception wenn die Anfrage fehlschlägt
+     */
+    @Test
+    void metaLiefertZeitzone() throws Exception {
+        mvc.perform(get("/api/meta"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tz").value(ChartTime.ZONE_ID));
+    }
+
+    /**
+     * {@code GET /api/history} liefert Status 200 und ein JSON-Array.
+     *
+     * @throws Exception wenn die Anfrage fehlschlägt
+     */
+    @Test
+    void historieLiefertArray() throws Exception {
+        when(stationService.history("stat-1", "DIESEL")).thenReturn(List.of());
+        mvc.perform(get("/api/history").param("station", "stat-1").param("fuel", "diesel"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
     }
 
 }

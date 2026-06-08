@@ -82,4 +82,13 @@ public class Station {
     @Column(name = "details_fetched_at")
     private Instant detailsFetchedAt;
 
+    /**
+     * Anzahl der bisherigen Fehlversuche beim Detailabruf. Wird bei einem transienten Fehler erhöht
+     * und nach einem erfolgreichen oder endgültig erfolglosen Abruf nicht weiter betrachtet. Dient
+     * dazu, mehrfach gescheiterte Tankstellen in der Anreicherungs-Warteschlange nach hinten zu
+     * sortieren, damit eine dauerhaft nicht abrufbare Tankstelle die übrigen nicht blockiert.
+     */
+    @Column(name = "detail_fetch_failures", nullable = false)
+    private int detailFetchFailures;
+
 }
