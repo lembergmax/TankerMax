@@ -57,9 +57,9 @@
 
     const addr = [s.street, [s.postCode, s.place].filter(Boolean).join(' ')].filter(Boolean).join(', ');
     const html = '<div class="info-card"><h3>Details</h3>' +
-      kv('Marke', T.esc(s.brand)) +
-      kv('Adresse', T.esc(addr || '—'), 'addr') +
-      idField(s.id) +
+      copyField('Marke', s.brand, false) +
+      copyField('Adresse', addr, false) +
+      copyField('Tankstellen-ID', s.id, true) +
       kv('Entfernung', c.ct1(s.dist) + ' km') +
       '<div class="kv"><span class="k">Status</span><span class="stp ' + (s.isOpen ? 'open' : 'closed') + '">' + (s.isOpen ? 'Geöffnet' : 'Geschlossen') + '</span></div>' +
       openingBlock(s) + '</div>';
@@ -182,20 +182,29 @@
   }
   function kv(k, v, cls) { return '<div class="kv"><span class="k">' + k + '</span><span class="v ' + (cls || '') + '">' + v + '</span></div>'; }
 
-  // ── Tankstellen-ID: eigenes Wertfeld mit Kopier-Schaltfläche ─────────────────
+  // ── Kopierbare Wertfelder: Marke, Adresse, Tankstellen-ID ────────────────────
   // Bezeichnung in eigener Zeile (wie eine Teilüberschrift), darunter ein ruhiges
-  // Feld im Stil der Modal-Eingaben (--surf2-Fläche, Fokusring) mit der ID in
-  // Monospace und einem angedockten Ghost-Button zum Kopieren.
+  // Feld im Stil der Modal-Eingaben (--surf2-Fläche, Fokusring) mit dem Wert und
+  // einem angedockten Ghost-Button zum Kopieren. Die Tankstellen-ID wird monospace
+  // gesetzt (mono=true), Marke und Adresse im normalen Fließtext.
   const COPY_ICON = '<svg class="ic-copy" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
   const CHECK_ICON = '<svg class="ic-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
-  // Der Roh-Wert wird sowohl im sichtbaren <code> als auch im data-copy-Attribut per
+  // Der Roh-Wert wird sowohl im sichtbaren Element als auch im data-copy-Attribut per
   // T.esc(...) maskiert; beim Klick liest der Browser das Attribut wieder entschlüsselt.
-  function idField(id) {
-    const e = T.esc(id);
-    return '<div class="idkv"><span class="idk">Tankstellen-ID</span>' +
-      '<div class="idfield"><code class="idval">' + e + '</code>' +
-      '<button type="button" class="copy-btn" data-copy="' + e + '" aria-label="Tankstellen-ID kopieren" title="ID kopieren">' +
-      COPY_ICON + CHECK_ICON + '<span class="copy-tx">Kopiert</span></button></div></div>';
+  // Fehlt der Wert, entfällt der Kopier-Button und es bleibt ein „—" stehen.
+  function copyField(label, value, mono) {
+    const lbl = T.esc(label);
+    const raw = (value == null ? '' : String(value)).trim();
+    const e = T.esc(raw);
+    const tag = mono ? 'code' : 'span';
+    const valCls = 'copyval' + (mono ? ' mono' : '');
+    const btn = raw
+      ? '<button type="button" class="copy-btn" data-copy="' + e + '" data-copy-label="' + lbl + '" aria-label="' + lbl + ' kopieren" title="' + lbl + ' kopieren">' +
+        COPY_ICON + CHECK_ICON + '<span class="copy-tx">Kopiert</span></button>'
+      : '';
+    return '<div class="copykv"><span class="copyk">' + lbl + '</span>' +
+      '<div class="copyfield"><' + tag + ' class="' + valCls + '">' + (e || '—') + '</' + tag + '>' +
+      btn + '</div></div>';
   }
 
   // ── Skeleton-Platzhalter waehrend des Ladens ─────────────────────
@@ -287,7 +296,7 @@
     rs.value = c.state.region;
   }
 
-  // ── Kopieren in die Zwischenablage (für die Tankstellen-ID) ──────────────────
+  // ── Kopieren in die Zwischenablage (Marke, Adresse, Tankstellen-ID) ──────────
   // Bevorzugt die Async-Clipboard-API (nur im sicheren Kontext verfügbar), fällt
   // sonst auf ein verstecktes <textarea> + execCommand zurück. Liefert true/false.
   async function copyToClipboard(text) {
@@ -322,7 +331,7 @@
   function flashCopy(btn, ok) {
     btn.classList.remove('copied', 'failed');
     btn.classList.add(ok ? 'copied' : 'failed');
-    announceCopy(ok ? 'Tankstellen-ID kopiert' : 'Kopieren fehlgeschlagen');
+    announceCopy(ok ? (btn.dataset.copyLabel || 'Wert') + ' kopiert' : 'Kopieren fehlgeschlagen');
     clearTimeout(copyResetTimer);
     copyResetTimer = setTimeout(() => { btn.classList.remove('copied', 'failed'); announceCopy(''); }, 1500);
   }
@@ -371,7 +380,7 @@
       api.setCompare(on);
     });
 
-    // ── Tankstellen-ID kopieren ──
+    // ── Wertfelder kopieren (Marke, Adresse, Tankstellen-ID) ──
     // Eine delegierte Listener-Instanz: renderSelection baut die Detailspalte bei jeder
     // Auswahl/jedem Poll per innerHTML neu auf, ein einmaliger Listener auf root überlebt das.
     root.addEventListener('click', async e => {

@@ -143,22 +143,23 @@ body[data-variant="pro"] .tiles { display:grid; }
 .kv .k { font-size:13px; color:var(--muted); font-weight:600; flex-shrink:0; }
 .kv .v { font-size:13.5px; font-weight:700; }
 .kv .v.g { color:var(--go); }
-.kv .v.addr { max-width:66%; text-align:right; line-height:1.35; overflow-wrap:anywhere; }
 
-/* ── Tankstellen-ID · eigenes Wertfeld mit Kopier-Schaltfläche ───── */
+/* ── Kopierbare Wertfelder · Marke, Adresse, Tankstellen-ID ───────── */
 /* Bezeichnung in eigener Zeile (wie eine Teilüberschrift), darunter ein Feld im Stil der
    Modal-Eingaben (.mdl .field input): --surf2-Fläche, --line2-Rahmen, 11px-Radius, gleicher Fokusring. */
-.idkv { padding:8px 0; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:8px; }
-.idkv .idk { font-size:13px; color:var(--muted); font-weight:600; }
-.idfield { display:flex; align-items:center; gap:8px; padding:9px 9px 9px 13px; background:var(--surf2); border:1px solid var(--line2); border-radius:11px; transition:border-color .18s, box-shadow .18s; }
+.copykv { padding:8px 0; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:8px; }
+.copykv .copyk { font-size:13px; color:var(--muted); font-weight:600; }
+.copyfield { display:flex; align-items:center; gap:8px; padding:9px 9px 9px 13px; background:var(--surf2); border:1px solid var(--line2); border-radius:11px; transition:border-color .18s, box-shadow .18s; }
 /* Einziger fokussierbarer Inhalt ist der Button; der Fokusring liegt am ganzen Feld
    (input-typische Optik), daher trägt der Button selbst keinen zweiten Umriss. */
-.idfield:focus-within { border-color:var(--ind); box-shadow:0 0 0 3px var(--ind-bg); }
-.idval { flex:1; min-width:0; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; font-weight:600; line-height:1.4; color:var(--text); letter-spacing:.1px; overflow-wrap:anywhere; word-break:break-word; }
+.copyfield:focus-within { border-color:var(--ind); box-shadow:0 0 0 3px var(--ind-bg); }
+/* Wert im normalen Fließtext (Marke, Adresse); die Variante .mono setzt die Tankstellen-ID monospace. */
+.copyval { flex:1; min-width:0; font-size:13.5px; font-weight:700; line-height:1.4; color:var(--text); overflow-wrap:anywhere; word-break:break-word; }
+.copyval.mono { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; font-weight:600; letter-spacing:.1px; }
 .copy-btn { flex-shrink:0; display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 10px; border:1px solid transparent; border-radius:8px; background:transparent; color:var(--muted); font-family:inherit; font-size:11.5px; font-weight:700; cursor:pointer; transition:background .18s, color .18s; }
 .copy-btn:hover { background:var(--ind-bg); color:var(--ind); }
 .copy-btn:active { transform:translateY(.5px); }
-.copy-btn:focus-visible { outline:none; } /* Fokus zeigt der Feldrahmen (.idfield:focus-within) */
+.copy-btn:focus-visible { outline:none; } /* Fokus zeigt der Feldrahmen (.copyfield:focus-within) */
 .copy-btn svg { flex-shrink:0; }
 /* Standardzustand: nur das Kopier-Icon; Häkchen und „Kopiert"-Text sind verborgen. */
 .copy-btn .ic-check, .copy-btn .copy-tx { display:none; }
@@ -170,7 +171,7 @@ body[data-variant="pro"] .tiles { display:grid; }
 /* Fehler: kurzer roter Hinweis (Icon bleibt das Kopier-Icon, Ansage per Live-Region). */
 .copy-btn.failed, .copy-btn.failed:hover { color:var(--down); background:var(--down-bg); }
 @media (prefers-reduced-motion: reduce) {
-  .idfield, .copy-btn { transition:none; }
+  .copyfield, .copy-btn { transition:none; }
   .copy-btn:active { transform:none; }
 }
 
