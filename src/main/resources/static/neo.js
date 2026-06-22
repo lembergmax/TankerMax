@@ -56,7 +56,7 @@
     const t = $('#tiles'); if (t) { t.style.display = ''; renderTiles(d, c); }
 
     const addr = [s.street, [s.postCode, s.place].filter(Boolean).join(' ')].filter(Boolean).join(', ');
-    const html = '<div class="info-card"><h3>Details</h3>' +
+    const html = forecastBlock(d, c) + '<div class="info-card"><h3>Details</h3>' +
       copyField('Marke', s.brand, false) +
       copyField('Adresse', addr, false) +
       copyField('Tankstellen-ID', s.id, true) +
@@ -132,6 +132,44 @@
       ? '<span class="oh-badge open">Geöffnet' + (todayClose ? ' · bis ' + T.esc(todayClose) : '') + '</span>'
       : '<span class="oh-badge closed">Geschlossen' + (todayOpen ? ' · ab ' + T.esc(todayOpen) : '') + '</span>';
     return '<div class="oh">' + ohCap(badge) + '<div class="oh-sched">' + rows + '</div></div>';
+  }
+
+  // ── KI-Vorhersage-Karte (Tanktipp + Treffer-Statistik) ──────────
+  // Wird in der Detailspalte oberhalb der Details gezeigt, sobald die Vorhersage eingeblendet ist.
+  function forecastBlock(d, c) {
+    if (!c.state.forecast) return '';
+    return forecastCard(d.forecast, c);
+  }
+  function forecastCard(fc, c) {
+    if (!fc || !fc.available) {
+      return '<div class="fc-card"><h3>KI-Vorhersage</h3>' +
+        '<div class="fc-empty">Für diese Tankstelle liegt noch keine Vorhersage vor (zu wenig Historie oder Training ausstehend).</div></div>';
+    }
+    return '<div class="fc-card"><h3>KI-Vorhersage</h3>' + tipHTML(fc.tip, c) + accuracyHTML(fc.accuracy, c) + '</div>';
+  }
+  // Tanktipp: Empfehlung (jetzt tanken / warten) samt prognostiziertem Tagestief und -mittel.
+  function tipHTML(tip, c) {
+    if (!tip) return '';
+    const rec = tip.recommendation;
+    const cls = rec === 'WARTEN' ? 'wait' : (rec === 'TANKEN' ? 'go' : 'neutral');
+    const label = rec === 'WARTEN' ? 'Warten' : (rec === 'TANKEN' ? 'Jetzt tanken' : 'Keine Empfehlung');
+    const save = (rec === 'WARTEN' && tip.savingCt != null && tip.savingCt > 0)
+      ? '<span class="fc-tip-sub">bis −' + c.ct1(tip.savingCt) + ' ct möglich</span>' : '';
+    const head = rec ? '<div class="fc-tip ' + cls + '"><span class="fc-tip-badge">' + label + '</span>' + save + '</div>' : '';
+    return head +
+      '<div class="kv"><span class="k">Prog. Tagestief</span><span class="v">' + c.eur(tip.low) +
+      (tip.lowAt ? ' · ' + c.hhmm(tip.lowAt) : '') + '</span></div>' +
+      '<div class="kv"><span class="k">Prog. Tagesmittel</span><span class="v">' + c.eur(tip.mean) + '</span></div>';
+  }
+  // Treffer-Statistik der bereits abgeglichenen Vorhersagen (richtig / fast / falsch).
+  function accuracyHTML(acc, c) {
+    if (!acc || !acc.total) return '';
+    return '<div class="fc-acc"><span class="fc-acc-h">Treffer letzte ' + acc.total + ' Tage</span>' +
+      '<div class="fc-pills"><span class="fc-pill ok">' + acc.correct + ' richtig</span>' +
+      '<span class="fc-pill mid">' + acc.almost + ' fast</span>' +
+      '<span class="fc-pill bad">' + acc.wrong + ' falsch</span></div>' +
+      (acc.avgErrorCt != null ? '<span class="fc-acc-avg">Ø Abweichung ' + c.ct1(acc.avgErrorCt) + ' ct</span>' : '') +
+      '</div>';
   }
 
   function renderTiles(d, c) {
@@ -289,6 +327,21 @@
       $$('[data-retry]').forEach(b => b.addEventListener('click', () => location.reload()));
     } catch (e) {}
   }
+  // Echtzeit-Status im Header spiegeln; die Engine ruft dies bei jedem Verbindungswechsel.
+  // status: 'live' (verbunden) · 'connecting' (Aufbau/Wiederaufbau) · 'offline' (nicht verfügbar).
+  const LIVE_STATES = {
+    live: ['live', 'Live', 'Live – Preise aktualisieren sich automatisch'],
+    connecting: ['connecting', 'Verbinde…', 'Verbindung wird hergestellt…'],
+    offline: ['offline', 'Offline', 'Keine Echtzeit-Verbindung – wird automatisch erneut versucht'],
+  };
+  function renderLiveStatus(status) {
+    const el = $('#liveStat'); if (!el) return;
+    const [st, tx, title] = LIVE_STATES[status] || LIVE_STATES.connecting;
+    el.setAttribute('data-state', st);
+    el.setAttribute('title', title);
+    const t = el.querySelector('.live-tx'); if (t) t.textContent = tx;
+  }
+
   // Regionen-Auswahl befuellen; die Engine ruft dies bei Start und nach erfolgreichem Retry.
   function renderRegions(regions, c) {
     const rs = $('#regionSel'); if (!rs) return;
@@ -353,7 +406,7 @@
       font: "'Plus Jakarta Sans', system-ui, sans-serif",
       theme: chartPalette(),
       renderList, renderSelection, renderCompare, renderListSkeleton, renderSelectionSkeleton, chartLoading,
-      renderError, renderEmpty, renderRegions,
+      renderError, renderEmpty, renderRegions, renderLiveStatus,
     });
 
     // ── theme: spaeteres Umschalten (Buttons oder System-Aenderung) ──
@@ -379,6 +432,24 @@
       cb.querySelector('.lbl').textContent = on ? 'Vergleich beenden' : 'Vergleichen';
       api.setCompare(on);
     });
+
+    // ── Vorhersage-Umschalter (nur sichtbar, wenn serverseitig aktiviert) ──
+    const fb = $('#forecastBtn');
+    if (fb) {
+      if (!api.forecastEnabled) {
+        fb.style.display = 'none';
+      } else {
+        const setFcLabel = on => { const lbl = fb.querySelector('.lbl'); if (lbl) lbl.textContent = on ? 'Vorhersage aus' : 'Vorhersage'; };
+        fb.addEventListener('click', () => {
+          const on = !api.state.forecast;
+          fb.classList.toggle('active', on);
+          fb.setAttribute('aria-pressed', String(on));
+          setFcLabel(on);
+          api.setForecast(on);
+        });
+        if (api.state.forecast) { fb.classList.add('active'); fb.setAttribute('aria-pressed', 'true'); setFcLabel(true); }
+      }
+    }
 
     // ── Wertfelder kopieren (Marke, Adresse, Tankstellen-ID) ──
     // Eine delegierte Listener-Instanz: renderSelection baut die Detailspalte bei jeder

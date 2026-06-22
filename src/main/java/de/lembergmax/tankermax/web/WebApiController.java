@@ -1,5 +1,6 @@
 package de.lembergmax.tankermax.web;
 
+import de.lembergmax.tankermax.forecast.config.ForecastProperties;
 import de.lembergmax.tankermax.web.dto.MetaDto;
 import de.lembergmax.tankermax.web.dto.PointDto;
 import de.lembergmax.tankermax.web.dto.RegionDto;
@@ -36,14 +37,17 @@ public class WebApiController {
     /** Zugriff auf Tankstellen, Preise und Historie. */
     private final StationQueryService stationService;
 
+    /** Konfiguration der KI-Vorhersage (steuert die Sichtbarkeit der Vorhersage im Dashboard). */
+    private final ForecastProperties forecastProperties;
+
     /**
-     * Liefert allgemeine Metadaten (Chart-Zeit und Zeitzone).
+     * Liefert allgemeine Metadaten (Chart-Zeit, Zeitzone und ob die Vorhersage aktiviert ist).
      *
-     * @return Metadaten mit Chart-Zeit und Zeitzone
+     * @return Metadaten mit Chart-Zeit, Zeitzone und Vorhersage-Status
      */
     @GetMapping("/meta")
     public MetaDto meta() {
-        return new MetaDto(ChartTime.now(), ChartTime.ZONE_ID);
+        return new MetaDto(ChartTime.now(), ChartTime.ZONE_ID, forecastProperties.isEnabled());
     }
 
     /**

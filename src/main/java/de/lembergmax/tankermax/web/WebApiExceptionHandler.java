@@ -21,7 +21,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
  * ergänzt werden nur die anwendungsspezifischen Fälle. Bewusst auf {@link WebApiController}
  * begrenzt, damit andere Antworten unberührt bleiben. Nur im Profil {@code web}.</p>
  */
-@RestControllerAdvice(assignableTypes = WebApiController.class)
+@RestControllerAdvice(assignableTypes = {WebApiController.class, ForecastApiController.class})
 @Profile("web")
 public class WebApiExceptionHandler extends ResponseEntityExceptionHandler {
 

@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import de.lembergmax.tankermax.forecast.config.ForecastProperties;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +36,10 @@ class WebApiControllerTest {
     /** Gemockter Tankstellen-/Preisdienst. */
     @MockitoBean
     private StationQueryService stationService;
+
+    /** Gemockte Vorhersage-Konfiguration (für die {@code /meta}-Antwort). */
+    @MockitoBean
+    private ForecastProperties forecastProperties;
 
     /**
      * {@code GET /api/regions} liefert Status 200 und ein JSON-Array.

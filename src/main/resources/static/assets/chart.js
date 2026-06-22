@@ -11,12 +11,24 @@
   const C = {
     bg: '#0b0f18', grid: '#161d2b', text: '#8ea4c0', border: '#2a3548',
     up: '#26a69a', down: '#ef5350', accent: '#4f90ff', accentSoft: '#58a6ff',
-    crosshair: '#58a6ff66',
+    crosshair: '#58a6ff66', forecast: '#f5a524', forecastBand: 'rgba(245,165,36,.5)',
   };
   const MIN = 60, HOUR = 3600, DAY = 86400;
   // Sichtfenster-Konstanten (benannt statt Magic Numbers):
-  const HISTORY_WINDOW_S = 2 * DAY;          // sichtbarer Verlauf links von „jetzt"
+  const DEFAULT_WINDOW_S = 2 * DAY;          // Standard-Sichtfenster links von „jetzt" (feine Zeitrahmen)
   const FUTURE_PAD_S = 30 * MIN;             // Rand rechts des letzten Punktes
+  // Geladene Historientiefe (muss zu StationQueryService.HISTORY_DAYS passen): das Sichtfenster
+  // kann nie weiter zurueckreichen, als Daten vorliegen.
+  const HISTORY_MAX_S = 14 * DAY;
+  // Angestrebte Zahl sichtbarer Kerzen, aus der sich das Sichtfenster grober Zeitrahmen ableitet.
+  const TARGET_BARS = 4;
+  // Anfaengliches Sichtfenster zum gewaehlten Zeitrahmen (Aggregations-Bucket): feine Rahmen
+  // (5m … 4h) behalten das Standardfenster, tageweise Rahmen weiten es auf – gedeckelt durch die
+  // geladene Historientiefe –, damit auch breite Kerzen (1T … 14T) als mehrere Balken sichtbar
+  // werden statt nur eines am linken Rand.
+  function windowFor(tf) {
+    return Math.min(HISTORY_MAX_S, Math.max(DEFAULT_WINDOW_S, tf * TARGET_BARS));
+  }
 
   // Greift verzoegert auf window.TK.esc zu: shared.js laedt nach chart.js, daher
   // existiert window.TK erst zur Laufzeit (Tooltip wird erst nach dem Laden gebaut).
@@ -80,11 +92,49 @@
     const o = aggregateOHLC(data, tf);
     return type === 'heikin' ? toHeikin(o) : o;
   }
+  // Eine Heikin-Ashi-Kerze aus dem rohen OHLC-Bucket und der HA-Kerze des Vorgängers ableiten
+  // (identisch zu toHeikin, aber inkrementell: erlaubt Live-Updates ohne die ganze Reihe neu zu rechnen).
+  function heikinFrom(raw, prev) {
+    const haC = (raw.open + raw.high + raw.low + raw.close) / 4;
+    const haO = (prev.open + prev.close) / 2;
+    return { time: raw.time, open: haO, high: Math.max(raw.high, haO, haC), low: Math.min(raw.low, haO, haC), close: haC };
+  }
+  // Anfangswert des HA-Vorgängers für die erste Kerze (entspricht der Initialisierung in toHeikin).
+  function heikinSeed(raw) {
+    return { open: raw.open, close: (raw.open + raw.high + raw.low + raw.close) / 4 };
+  }
+  // Live-Aggregationszustand nach einem Voll-Render festhalten, damit update() die nächste(n)
+  // Beobachtung(en) in die laufende Kerze/Linie einpflegen kann, ohne den Chart neu aufzubauen
+  // (Zoom/Pan bleiben erhalten – lightweight-charts hält die Sichtweite bei series.update()).
+  function buildLive(history, opts) {
+    const tf = opts.tf, type = opts.type;
+    if (type === 'line' || type === 'area') {
+      let lastTime = null;
+      if (history.length) lastTime = (tf === MIN) ? history[history.length - 1].time : bucket(history[history.length - 1].time, tf);
+      return { mode: 'single', tf, type, lastTime };
+    }
+    const raw = aggregateOHLC(history, tf);
+    const rawLast = raw.length ? { ...raw[raw.length - 1] } : null;
+    let haPrev = null, haCur = null;
+    if (type === 'heikin' && raw.length) {
+      const ha = toHeikin(raw);
+      const last = ha[ha.length - 1];
+      haCur = { open: last.open, close: last.close };
+      haPrev = ha.length >= 2 ? { open: ha[ha.length - 2].open, close: ha[ha.length - 2].close } : heikinSeed(raw[0]);
+    }
+    return { mode: 'single', tf, type, rawLast, haPrev, haCur };
+  }
 
   // ── Modulzustand ─────────────────────────────────────────────────
   let chart, mainSeries, currentPriceLine;
   let el, tooltipEl, container, ro;
   let compareSeries = [];
+  // Vorhersage-Reihen (Prognosekurve, Unsicherheitsband, Tagestief-Linie) und der späteste
+  // Prognosezeitpunkt, bis zu dem das Sichtfenster nach rechts geweitet wird.
+  let forecastSeries = null, forecastLowSeries = null, forecastHighSeries = null;
+  let forecastLowLine = null, forecastMaxTime = 0;
+  // Aggregationszustand für inkrementelle Live-Updates (von render/renderCompare gesetzt).
+  let live = null;
 
   function init(opts) {
     if (chart) { try { chart.remove(); } catch (e) {} chart = null; }
@@ -134,6 +184,32 @@
     mainSeries = currentPriceLine = null;
     compareSeries.forEach(o => { try { chart.removeSeries(o.s); } catch (e) {} });
     compareSeries = [];
+    [forecastSeries, forecastLowSeries, forecastHighSeries].forEach(s => { if (s) { try { chart.removeSeries(s); } catch (e) {} } });
+    forecastSeries = forecastLowSeries = forecastHighSeries = forecastLowLine = null;
+    forecastMaxTime = 0;
+    live = null;
+  }
+
+  // ── Vorhersage als zusätzliche Reihen über den Ist-Verlauf legen ──
+  // fc (Vorhersage): { points:[{time,value}], lower:[…], upper:[…], tip:{ low, … } }.
+  // Die Reihen beginnen am letzten Ist-Punkt („jetzt"), damit die Prognose nahtlos anschließt.
+  function addForecast(history, fc) {
+    if (!fc || !fc.points || !fc.points.length) return;
+    const last = history.length ? history[history.length - 1] : null;
+    const join = (arr) => last ? [{ time: last.time, value: last.value }].concat(arr.filter(p => p.time > last.time)) : arr.slice();
+    if (fc.lower && fc.lower.length && fc.upper && fc.upper.length) {
+      const bandOpts = { color: C.forecastBand, lineWidth: 1, lineStyle: LWC.LineStyle.Dotted, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, pointMarkersVisible: false };
+      forecastLowSeries = chart.addSeries(LWC.LineSeries, bandOpts);
+      forecastHighSeries = chart.addSeries(LWC.LineSeries, bandOpts);
+      forecastLowSeries.setData(join(fc.lower));
+      forecastHighSeries.setData(join(fc.upper));
+    }
+    forecastSeries = chart.addSeries(LWC.LineSeries, { color: C.forecast, lineWidth: 2, lineStyle: LWC.LineStyle.Dashed, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: true, crosshairMarkerRadius: 3, pointMarkersVisible: false });
+    forecastSeries.setData(join(fc.points));
+    forecastMaxTime = fc.points[fc.points.length - 1].time;
+    if (fc.tip && fc.tip.low != null) {
+      try { forecastLowLine = forecastSeries.createPriceLine({ price: fc.tip.low, color: C.forecast, lineWidth: 1, lineStyle: LWC.LineStyle.Dotted, axisLabelVisible: true, title: 'Prog.-Tief' }); } catch (e) {}
+    }
   }
 
   // ── Vergleichsmodus: mehrere Stationen als Linien ueberlagern ────
@@ -144,15 +220,16 @@
       const histLine = aggregateForType(it.history, opts.tf, 'line');
       const ls = chart.addSeries(LWC.LineSeries, { color: it.color, lineWidth: 2, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: true, crosshairMarkerRadius: 3, pointMarkersVisible: false });
       ls.setData(histLine);
-      compareSeries.push({ s: ls, name: it.name, color: it.color });
+      compareSeries.push({ s: ls, id: it.id, name: it.name, color: it.color, lastTime: histLine.length ? histLine[histLine.length - 1].time : null });
     });
+    live = { mode: 'compare', tf: opts.tf, type: 'line' };
     const frame = () => {
       if (!chart) return;
       try {
         chart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
         const NOW = window.TKCLOCK.now, ts = chart.timeScale();
         ts.fitContent();
-        ts.setVisibleRange({ from: NOW - HISTORY_WINDOW_S, to: NOW + FUTURE_PAD_S });
+        ts.setVisibleRange({ from: NOW - windowFor(opts.tf), to: (forecastMaxTime ? forecastMaxTime + FUTURE_PAD_S : NOW + FUTURE_PAD_S) });
       } catch (e) { try { if (chart) chart.timeScale().fitContent(); } catch (e2) {} }
     };
     requestAnimationFrame(() => requestAnimationFrame(frame));
@@ -168,6 +245,9 @@
     const cur = (history[history.length - 1] || {}).value;
     // Aktuellpreis-Linie
     if (cur != null) currentPriceLine = mainSeries.createPriceLine({ price: cur, color: C.accent, lineWidth: 1, lineStyle: LWC.LineStyle.Dashed, axisLabelVisible: true, title: 'jetzt' });
+    live = buildLive(history, opts);
+    // Vorhersage einzeichnen (sofern aktiviert und vorhanden); weitet zugleich das Sichtfenster.
+    addForecast(history, opts.forecast);
 
     // Groesse setzen und den interessanten Ausschnitt rahmen, NACHDEM das Layout geflossen ist
     // (der Chart entsteht hinter der verborgenen Detailansicht und startet daher mit 0×0).
@@ -177,7 +257,7 @@
         chart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
         const NOW = window.TKCLOCK.now, ts = chart.timeScale();
         ts.fitContent();
-        ts.setVisibleRange({ from: NOW - HISTORY_WINDOW_S, to: NOW + FUTURE_PAD_S });
+        ts.setVisibleRange({ from: NOW - windowFor(opts.tf), to: (forecastMaxTime ? forecastMaxTime + FUTURE_PAD_S : NOW + FUTURE_PAD_S) });
       } catch (e) { try { if (chart) chart.timeScale().fitContent(); } catch (e2) {} }
     };
     requestAnimationFrame(() => requestAnimationFrame(frame));
@@ -207,6 +287,10 @@
       const v = md.close != null ? md.close : md.value;
       html += row(C.accentSoft, 'Ist-Preis', fmtPrice(v));
     }
+    if (forecastSeries) {
+      const fd = param.seriesData.get(forecastSeries);
+      if (fd && fd.value != null) html += row(C.forecast, 'Prognose', fmtPrice(fd.value));
+    }
     tooltipEl.innerHTML = html;
     tooltipEl.style.display = 'block';
     const w = tooltipEl.offsetWidth, h = tooltipEl.offsetHeight;
@@ -220,5 +304,72 @@
     return '<div class="tt-row"><span class="tt-key"><span class="tt-dot" style="background:' + color + '"></span>' + key + '</span><span class="tt-val">' + val + '</span></div>';
   }
 
-  window.ChartView = { init, render, renderCompare, fmtPrice };
+  // ── Live-Update: einzelne Beobachtung einpflegen ─────────────────
+  // Aktualisiert die laufende Kerze/Linie über series.update() statt eines Neuaufbaus, sodass die
+  // aktuelle Sichtweite (Zoom/Pan) erhalten bleibt. point: { time, value } (Chart-Sekunden, €/L).
+  function update(point) {
+    if (!chart || !mainSeries || !live || live.mode !== 'single' || !point) return;
+    const t = point.time, v = point.value;
+    if (v == null) return;
+    const tf = live.tf;
+
+    if (live.type === 'line' || live.type === 'area') {
+      const time = (tf === MIN) ? t : bucket(t, tf);
+      if (live.lastTime != null && time < live.lastTime) return;
+      try { mainSeries.update({ time, value: v }); } catch (e) { return; }
+      live.lastTime = time;
+      updateNowLine(v);
+      return;
+    }
+
+    const bt = bucket(t, tf);
+    let raw = live.rawLast;
+    if (!raw) {
+      raw = { time: bt, open: v, high: v, low: v, close: v };
+      live.rawLast = raw;
+    } else if (bt > raw.time) {
+      if (live.type === 'heikin') live.haPrev = live.haCur || live.haPrev;
+      const prevClose = raw.close;
+      raw = { time: bt, open: prevClose, high: Math.max(prevClose, v), low: Math.min(prevClose, v), close: v };
+      live.rawLast = raw;
+    } else if (bt === raw.time) {
+      if (v > raw.high) raw.high = v;
+      if (v < raw.low) raw.low = v;
+      raw.close = v;
+    } else {
+      return; // ältere Beobachtung als die laufende Kerze – ignorieren
+    }
+
+    let bar = raw;
+    if (live.type === 'heikin') {
+      bar = heikinFrom(raw, live.haPrev || heikinSeed(raw));
+      live.haCur = { open: bar.open, close: bar.close };
+    }
+    try { mainSeries.update(bar); } catch (e) { return; }
+    updateNowLine(v);
+  }
+
+  // Aktuellpreis-Linie ("jetzt") auf den neuen Wert nachziehen.
+  function updateNowLine(v) {
+    if (currentPriceLine) { try { currentPriceLine.applyOptions({ price: v }); } catch (e) {} }
+  }
+
+  // ── Live-Update im Vergleichsmodus ───────────────────────────────
+  // values: [{ id, value }] – setzt je Station den jüngsten Linienpunkt auf den aktuellen Preis,
+  // verortet im Bucket der aktuellen Zeit. Erhält ebenfalls die Sichtweite.
+  function updateCompare(values) {
+    if (!chart || !live || live.mode !== 'compare' || !values || !values.length) return;
+    const tf = live.tf;
+    const now = (window.TKCLOCK && window.TKCLOCK.now) || Math.floor(Date.now() / 1000);
+    const time = bucket(now, tf);
+    const byId = new Map(values.map(x => [x.id, x.value]));
+    compareSeries.forEach(o => {
+      const v = byId.get(o.id);
+      if (v == null) return;
+      if (o.lastTime != null && time < o.lastTime) return;
+      try { o.s.update({ time, value: v }); o.lastTime = time; } catch (e) {}
+    });
+  }
+
+  window.ChartView = { init, render, renderCompare, update, updateCompare, fmtPrice };
 })();

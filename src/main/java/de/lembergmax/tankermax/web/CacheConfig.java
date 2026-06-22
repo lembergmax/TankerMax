@@ -32,7 +32,7 @@ public class CacheConfig {
      */
     @Bean
     public CacheManager cacheManager() {
-        final CaffeineCacheManager cacheManager = new CaffeineCacheManager("regions", "stations");
+        final CaffeineCacheManager cacheManager = new CaffeineCacheManager("regions", "stations", "forecast");
         cacheManager.setCaffeine(Caffeine.newBuilder().expireAfterWrite(CACHE_TTL));
         return cacheManager;
     }

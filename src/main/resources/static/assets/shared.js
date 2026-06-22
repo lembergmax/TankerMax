@@ -25,8 +25,10 @@
   // lokale Wanduhr als UTC-Epoch kodiert (entspricht ChartTime.now() im Backend).
   const clientChartNow = () => Math.floor(Date.now() / 1000) - new Date().getTimezoneOffset() * 60;
   const FUEL = { e5: 'Super E5', e10: 'Super E10', diesel: 'Diesel' };
-  // Takt des Auto-Pollings der Preise (ms). Das Backend erfasst rotierend neue Preise.
-  const POLL_INTERVAL_MS = 300000;
+  // Rückfall-Takt der Preisaktualisierung (ms): greift nur, wenn die Echtzeit-Verbindung (SSE) NICHT
+  // steht (kein EventSource, Verbindungsabbruch). Im Normalbetrieb schiebt der Server die Updates
+  // über window.TKLIVE/SSE; dann läuft dieser Poll leer und erzeugt keine zusätzliche Last.
+  const POLL_INTERVAL_MS = 60000;
   // Persistenz nutzerseitiger Auswahl in localStorage (Praefix wie beim Theme: tk-pro-*).
   const LS_PREFIX = 'tk-pro-';
   function lsGet(key) { try { return localStorage.getItem(LS_PREFIX + key); } catch (e) { return null; } }
@@ -55,6 +57,7 @@
       hideClosed: lsGet('hideClosed') === 'true',
       compareOn: !!(savedCompare && savedCompare.on),
       compareIds: (savedCompare && Array.isArray(savedCompare.ids)) ? savedCompare.ids.slice(0, 4) : [],
+      forecast: lsGet('forecast') === 'true',
     };
 
     const state = {
@@ -62,6 +65,7 @@
       region: null, selectedId: null, chartType: 'candle', tf: 3600,
       hideClosed: saved.hideClosed,
       compare: saved.compareOn, compareIds: saved.compareIds, loadError: false,
+      forecast: saved.forecast,
     };
 
     let regions = [], regionsFailed = false;
@@ -71,9 +75,21 @@
 
     let stationCache = [];
     const seriesCache = new Map();
+    // Zwischenspeicher der KI-Vorhersagen je Tankstelle (wird wie seriesCache bei Region-/
+    // Kraftstoffwechsel geleert, da die Vorhersage vom Kraftstoff abhängt).
+    const forecastCache = new Map();
     // Generationszaehler gegen Races: jede Nutzeraktion (Region/Kraftstoff/Auswahl/Vergleich/Poll)
     // erhoeht ihn; eine veraltete asynchrone Antwort erkennt das und ueberschreibt nichts mehr.
     let nav = 0;
+    // Jüngster im Chart dargestellter Beobachtungszeitpunkt (Chart-Sekunden) der aktuellen Auswahl.
+    // Live-Updates speisen nur echte neue Punkte (time > diesem Wert) ein; zeitbasiert statt indexbasiert,
+    // damit das nachrückende 14-Tage-Fenster (vorne fallen Punkte weg) nicht zu Fehlzuordnungen führt.
+    let chartRawMaxTime = 0;
+    // Kennung der Station, deren Verlauf aktuell im Chart steht – damit ein Live-Update bei zwischen-
+    // zeitlich gewechselter Auswahl voll neu zeichnet statt fälschlich Punkte einzuspeisen.
+    let chartStationId = null;
+    // Zustand der Echtzeit-Verbindung (Server-Sent Events).
+    const liveConn = { es: null, connected: false, everConnected: false };
 
     const priceOf = s => s.priceNow;
     const shortName = s => (s.name ? s.name.replace(s.brand, '').trim() : s.name) || s.brand;
@@ -117,6 +133,7 @@
         state.loadError = true;
       }
       seriesCache.clear();
+      forecastCache.clear();
     }
     // Einzelne Historie robust laden: ein Fehler darf die Detailansicht nicht
     // abbrechen; der Fehlschlag wird nicht gecacht, damit er spaeter erneut greift.
@@ -127,6 +144,16 @@
       catch (e) { return []; }
       seriesCache.set(id, history);
       return history;
+    }
+    // KI-Vorhersage robust laden: ein Fehler darf die Detailansicht nicht abbrechen; der Fehlschlag
+    // wird nicht gecacht, damit er später erneut greift. Liefert null bei Fehler.
+    async function ensureForecast(id) {
+      if (forecastCache.has(id)) return forecastCache.get(id);
+      let forecast;
+      try { forecast = await API.getForecast(id, state.fuel); }
+      catch (e) { return null; }
+      forecastCache.set(id, forecast);
+      return forecast;
     }
     function selected() { return stationCache.find(s => s.id === state.selectedId); }
     // Standardauswahl: die oberste Tankstelle der aktuell sortierten Liste.
@@ -146,22 +173,29 @@
       const s = selected(); if (!s) return;
       if (!seriesCache.has(s.id) && adapter.renderSelectionSkeleton) adapter.renderSelectionSkeleton(s, ctx);
       const history = await ensureHistory(s.id);
+      const forecast = state.forecast ? await ensureForecast(s.id) : null;
       if (g != null && g !== nav) return;
-      try { window.ChartView.render(history, { type: state.chartType, tf: state.tf }); } catch (e) {}
-      adapter.renderSelection({ s, hist: history, cur: priceOf(s) }, ctx);
+      try { window.ChartView.render(history, { type: state.chartType, tf: state.tf, forecast }); } catch (e) {}
+      chartStationId = s.id;
+      chartRawMaxTime = history.length ? history[history.length - 1].time : 0;
+      adapter.renderSelection({ s, hist: history, cur: priceOf(s), forecast }, ctx);
     }
     // Aktualisiert nur die rechte Detailspalte aus dem Cache (kein Chart-Neuaufbau) – etwa fuer
-    // das Auto-Polling der Preise.
+    // das Auto-Polling der Preise. Die Vorhersage stammt aus dem Cache (kein erneuter Abruf).
     function refreshSelectionPanel() {
       const s = selected(); if (!s) return;
       const history = seriesCache.get(s.id); if (!history) return;
-      adapter.renderSelection({ s, hist: history, cur: priceOf(s) }, ctx);
+      const forecast = state.forecast ? forecastCache.get(s.id) : null;
+      adapter.renderSelection({ s, hist: history, cur: priceOf(s), forecast }, ctx);
     }
     async function renderChart(g) {
       const s = selected(); if (!s) return;
       const history = await ensureHistory(s.id);
+      const forecast = state.forecast ? await ensureForecast(s.id) : null;
       if (g != null && g !== nav) return;
-      try { window.ChartView.render(history, { type: state.chartType, tf: state.tf }); } catch (e) {}
+      try { window.ChartView.render(history, { type: state.chartType, tf: state.tf, forecast }); } catch (e) {}
+      chartStationId = s.id;
+      chartRawMaxTime = history.length ? history[history.length - 1].time : 0;
     }
     async function renderCompareView(g) {
       const anyFresh = state.compareIds.some(id => !seriesCache.has(id));
@@ -240,6 +274,15 @@
       if (on && !state.compareIds.length && state.selectedId) state.compareIds = [state.selectedId];
       await refresh(g);
     }
+    // Vorhersage ein-/ausblenden. Wirkt nur in der Einzelansicht (im Vergleichsmodus wird keine
+    // Prognose gezeichnet); der Zustand bleibt erhalten und greift wieder, sobald der Vergleich endet.
+    async function setForecast(on) {
+      const g = ++nav;
+      state.forecast = on;
+      persist();
+      if (state.compare) return;
+      await refreshSelection(g);
+    }
     async function toggleCompareId(id) {
       const i = state.compareIds.indexOf(id);
       if (i >= 0) { if (state.compareIds.length > 1) state.compareIds.splice(i, 1); }
@@ -259,6 +302,7 @@
       lsSet('hideClosed', String(state.hideClosed));
       if (state.region) lsSet('region', state.region);
       lsSet('compare', JSON.stringify({ on: state.compare, ids: state.compareIds }));
+      lsSet('forecast', String(state.forecast));
     }
 
     // Auswahl bzw. Vergleich-Umschalten einer Listenkarte – gemeinsam fuer Maus und Tastatur.
@@ -311,12 +355,58 @@
     if (adapter.renderRegions) adapter.renderRegions(regions, ctx);
     await refresh();
 
-    // Auto-Polling der Preise: aktualisiert Liste + Detailspalte aus frischen Daten, ohne den Chart
-    // neu aufzubauen (Zoom/Pan bleiben erhalten). Nur bei sichtbarem Tab und nicht im Vergleichsmodus.
-    // Passiver Refresh: nav wird NICHT erhoeht, damit ein laufendes Nutzer-Rendern nicht abgebrochen
-    // wird; ein zwischenzeitlicher Nutzerwechsel (nav aendert sich) verwirft das Poll-Ergebnis.
-    async function pollList() {
-      if (document.visibilityState !== 'visible' || state.compare || !state.region) return;
+    // ── Aktualisierung aus frischen Serverdaten ──────────────────────
+    // Alle folgenden Funktionen sind passiv: nav wird NICHT erhoeht, damit ein laufendes
+    // Nutzer-Rendern nicht abgebrochen wird; ein zwischenzeitlicher Nutzerwechsel (nav aendert sich)
+    // verwirft das Ergebnis.
+
+    // Liste + Detailspalte aus frischen Stationsdaten erneuern (Chart bleibt unberuehrt).
+    async function refreshStationsFromServer() {
+      const g = nav;
+      let list;
+      try { list = await API.getStations(state.region, state.fuel, state.hideClosed); }
+      catch (e) { return false; }
+      if (g !== nav) return false;
+      list.forEach(s => { s.brandStyle = window.TKBRAND.style(s.brand); });
+      stationCache = list;
+      state.loadError = false;
+      if (renderBootState()) return false;
+      if (!selected()) { const f = pickTop(); state.selectedId = f ? f.id : null; }
+      refreshList();
+      refreshSelectionPanel();
+      return true;
+    }
+
+    // Chart der aktuellen Auswahl live nachfuehren: nur echte neue Verlaufspunkte werden ueber
+    // ChartView.update() eingespeist (Zoom/Pan bleiben erhalten). Bei gewechselter Auswahl oder
+    // leerem Chart wird stattdessen voll neu gezeichnet.
+    async function liveUpdateChart() {
+      const s = selected(); if (!s) return;
+      const g = nav;
+      let nh;
+      try { nh = await API.getHistory(s.id, state.fuel); }
+      catch (e) { return; }
+      if (g !== nav) return;
+      seriesCache.set(s.id, nh);
+      if (s.id !== chartStationId || !chartRawMaxTime) {
+        const forecast = state.forecast ? await ensureForecast(s.id) : null;
+        if (g !== nav) return;
+        try { window.ChartView.render(nh, { type: state.chartType, tf: state.tf, forecast }); } catch (e) {}
+        chartStationId = s.id;
+        chartRawMaxTime = nh.length ? nh[nh.length - 1].time : 0;
+        refreshSelectionPanel();
+        return;
+      }
+      let changed = false;
+      for (const p of nh) {
+        if (p.time > chartRawMaxTime) { try { window.ChartView.update(p); } catch (e) {} chartRawMaxTime = p.time; changed = true; }
+      }
+      if (changed) refreshSelectionPanel();
+    }
+
+    // Vergleichsmodus live nachfuehren: frische Preise holen, je Station den juengsten Linienpunkt
+    // aktualisieren (ChartView.updateCompare) sowie Liste und Vergleichspanel neu aufbauen.
+    async function liveUpdateCompare() {
       const g = nav;
       let list;
       try { list = await API.getStations(state.region, state.fuel, state.hideClosed); }
@@ -326,13 +416,67 @@
       stationCache = list;
       state.loadError = false;
       if (renderBootState()) return;
-      if (!selected()) { const f = pickTop(); state.selectedId = f ? f.id : null; }
+      state.compareIds = state.compareIds.filter(id => stationCache.some(s => s.id === id));
       refreshList();
-      refreshSelectionPanel();
+      const values = [], items = [];
+      state.compareIds.forEach((id, i) => {
+        const s = stationCache.find(x => x.id === id);
+        if (!s) return;
+        values.push({ id, value: priceOf(s) });
+        items.push({ id, station: s, name: shortName(s), color: COMPARE_COLORS[i % COMPARE_COLORS.length], cur: priceOf(s) });
+      });
+      try { window.ChartView.updateCompare(values); } catch (e) {}
+      if (adapter.renderCompare) adapter.renderCompare(items, ctx);
+    }
+
+    // Ein Live-Ereignis (neue Preise) verarbeiten: je nach Modus Einzel- oder Vergleichsansicht.
+    async function applyLiveUpdate() {
+      if (!state.region) return;
+      if (state.compare) { await liveUpdateCompare(); return; }
+      if (await refreshStationsFromServer()) await liveUpdateChart();
+    }
+
+    // ── Echtzeit-Verbindung (Server-Sent Events) ─────────────────────
+    function setLiveStatus(s) { if (adapter.renderLiveStatus) { try { adapter.renderLiveStatus(s); } catch (e) {} } }
+
+    // Baut die SSE-Verbindung auf. Der Browser (EventSource) verbindet bei Abbruch selbsttaetig neu;
+    // bei jedem (Wieder-)Verbinden wird einmal voll nachgeladen, um waehrend des Ausfalls verpasste
+    // Aenderungen aufzuholen. Fehlt EventSource, uebernimmt der Rueckfall-Poll die Aktualisierung.
+    function connectLive() {
+      if (typeof window.EventSource === 'undefined') { setLiveStatus('offline'); return; }
+      let es;
+      try { es = new EventSource(API.STREAM_URL); }
+      catch (e) { setLiveStatus('offline'); return; }
+      liveConn.es = es;
+      setLiveStatus('connecting');
+      es.onopen = () => {
+        const reconnected = liveConn.everConnected;
+        liveConn.connected = true;
+        liveConn.everConnected = true;
+        setLiveStatus('live');
+        if (reconnected && document.visibilityState === 'visible') applyLiveUpdate();
+      };
+      es.addEventListener('prices', () => { if (document.visibilityState === 'visible') applyLiveUpdate(); });
+      es.onerror = () => { liveConn.connected = false; setLiveStatus('connecting'); };
+    }
+
+    // Rueckfall-Poll: greift nur, solange die Echtzeit-Verbindung NICHT steht. Bei stehender SSE-
+    // Verbindung laeuft er leer und erzeugt keine zusaetzliche Last.
+    async function pollList() {
+      if (document.visibilityState !== 'visible' || !state.region || liveConn.connected) return;
+      await applyLiveUpdate();
     }
     setInterval(pollList, POLL_INTERVAL_MS);
 
-    return { state, refresh, setRegion, setCompare, applyChartTheme };
+    // Nach dem Wechsel zurueck auf einen sichtbaren Tab einmal nachladen: waehrend der Tab verborgen
+    // war, wurden Live-Ereignisse bewusst ignoriert (kein sichtbarer Chart).
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && liveConn.connected) applyLiveUpdate();
+    });
+
+    connectLive();
+
+    return { state, refresh, setRegion, setCompare, setForecast, applyChartTheme, forecastEnabled: meta.forecastEnabled !== false };
   }
 
   window.TK = { eur, eur2, ct1, hhmm, esc, FUEL, makeDashboard };

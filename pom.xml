@@ -69,6 +69,35 @@
             <artifactId>caffeine</artifactId>
         </dependency>
 
+        <!-- Smile (Statistical Machine Intelligence & Learning Engine): reine Java-Bibliothek für das
+             Gradient-Boosting-Modell der Preisvorhersage. Bewusst gewählt, weil die Baum-Modelle ohne
+             native Bibliotheken auskommen und damit unverändert auf dem Raspberry Pi (aarch64) laufen.
+             Version 4.x ist die letzte für Java 21; smile-core liefert GradientTreeBoost samt LAD- und
+             Quantil-Verlust transitiv über smile-base/smile-data/smile-math. Nur im Profil "ingest"
+             tatsächlich genutzt (Training und Inferenz). -->
+        <dependency>
+            <groupId>com.github.haifengl</groupId>
+            <artifactId>smile-core</artifactId>
+            <version>4.3.0</version>
+            <!-- Die nativen BLAS/LAPACK-Bibliotheken (bytedeco openblas/arpack) liefern nur Binaries für
+                 x86_64-Windows/Linux/macOS – nicht für den Raspberry Pi (aarch64) –, blähen die JAR um
+                 ~200 MB auf und werden von den hier genutzten Baum-Modellen ohnehin nicht benötigt; Smile
+                 fällt ohne sie auf seine reine Java-Implementierung zurück. Daher ausgeschlossen. -->
+            <exclusions>
+                <exclusion>
+                    <groupId>org.bytedeco</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <!-- Smile bündelt den DuckDB-JDBC-Treiber (~73 MB) für seine Datei-/JDBC-Datenleser. Die
+                     Vorhersage baut ihre Datensätze direkt aus Zahlen-Arrays auf und nutzt diese Leser
+                     nicht; daher ausgeschlossen. -->
+                <exclusion>
+                    <groupId>org.duckdb</groupId>
+                    <artifactId>duckdb_jdbc</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
         <dependency>
             <groupId>org.mariadb.jdbc</groupId>
             <artifactId>mariadb-java-client</artifactId>

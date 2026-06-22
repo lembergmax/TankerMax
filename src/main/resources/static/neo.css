@@ -231,10 +231,46 @@ body[data-variant="pro"] .tiles { display:grid; }
 .region-sel svg { color:var(--ind); flex-shrink:0; }
 .region-sel select { border:none; background:transparent; font-family:inherit; font-weight:700; font-size:14px; color:var(--text); cursor:pointer; outline:none; padding:8px 2px; -webkit-appearance:none; appearance:none; }
 
+/* ── live-status (Echtzeit-Verbindung im Header) ────────────────── */
+.live { display:flex; align-items:center; gap:8px; height:40px; padding:0 14px; background:var(--surf); border-radius:99px; box-shadow:var(--sh-sm); font-size:12px; font-weight:700; color:var(--muted); white-space:nowrap; user-select:none; }
+.live-dot { width:9px; height:9px; border-radius:50%; background:var(--dim); flex-shrink:0; transition:background .2s; }
+.live[data-state="live"] { color:var(--go); }
+.live[data-state="live"] .live-dot { background:var(--go); box-shadow:0 0 0 4px var(--go-bg); animation:live-pulse 2s ease-in-out infinite; }
+.live[data-state="connecting"] { color:var(--wait); }
+.live[data-state="connecting"] .live-dot { background:var(--wait); box-shadow:0 0 0 4px var(--wait-bg); }
+.live[data-state="offline"] { color:var(--down); }
+.live[data-state="offline"] .live-dot { background:var(--down); box-shadow:0 0 0 4px var(--down-bg); }
+@keyframes live-pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+@media (prefers-reduced-motion: reduce) { .live[data-state="live"] .live-dot { animation:none; } }
+
 /* ── compare toggle (in chart toolbar) ──────────────────────────── */
 .cmp-btn { display:flex; align-items:center; gap:6px; border:none; background:var(--surf2); color:var(--muted); font-family:inherit; font-size:11.5px; font-weight:700; padding:7px 13px; border-radius:11px; cursor:pointer; transition:.2s; }
 .cmp-btn:hover { color:var(--text); }
 .cmp-btn.active { background:var(--ind); color:#fff; box-shadow:0 4px 12px var(--ind-bg); }
+
+/* ── Vorhersage-Umschalter (Chart-Werkzeugleiste) ───────────────── */
+.fc-btn { display:flex; align-items:center; gap:6px; border:none; background:var(--surf2); color:var(--muted); font-family:inherit; font-size:11.5px; font-weight:700; padding:7px 13px; border-radius:11px; cursor:pointer; transition:.2s; }
+.fc-btn:hover { color:var(--text); }
+.fc-btn.active { background:#f5a524; color:#fff; box-shadow:0 4px 12px rgba(245,165,36,.28); }
+
+/* ── KI-Vorhersage-Karte (Detailspalte) ─────────────────────────── */
+.fc-card { background:var(--surf); border-radius:var(--r); padding:18px; box-shadow:var(--sh); margin-bottom:14px; border-left:3px solid #f5a524; }
+.fc-card h3 { font-size:11px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; color:var(--dim); margin-bottom:10px; }
+.fc-empty { font-size:12.5px; color:var(--muted); line-height:1.5; }
+.fc-tip { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+.fc-tip-badge { font-size:12px; font-weight:800; padding:5px 12px; border-radius:99px; }
+.fc-tip.wait .fc-tip-badge { background:rgba(245,165,36,.16); color:#b5740a; }
+.fc-tip.go .fc-tip-badge { background:rgba(38,166,154,.16); color:var(--go); }
+.fc-tip.neutral .fc-tip-badge { background:var(--surf2); color:var(--muted); }
+.fc-tip-sub { font-size:11.5px; color:var(--muted); font-weight:600; }
+.fc-acc { margin-top:12px; padding-top:12px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:8px; }
+.fc-acc-h { font-size:10.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--dim); }
+.fc-pills { display:flex; gap:6px; flex-wrap:wrap; }
+.fc-pill { font-size:11px; font-weight:700; padding:4px 10px; border-radius:99px; }
+.fc-pill.ok { background:rgba(38,166,154,.16); color:var(--go); }
+.fc-pill.mid { background:rgba(245,165,36,.16); color:#b5740a; }
+.fc-pill.bad { background:rgba(239,83,80,.16); color:var(--down); }
+.fc-acc-avg { font-size:11.5px; color:var(--muted); }
 
 /* ── compare: list dots + panel ─────────────────────────────────── */
 .cmp-dot { width:18px; height:18px; border-radius:7px; flex-shrink:0; border:2px solid var(--line2); background:transparent; transition:.15s; }
@@ -308,8 +344,10 @@ body[data-variant="pro"] .tiles { display:grid; }
   .cc-top { flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; }
   .cc-top::-webkit-scrollbar { display:none; }
   .cc-spacer { display:none; }
-  .cc-top .tbset, .cmp-btn { flex-shrink:0; }
-  .cmp-btn .lbl { display:none; }
+  .cc-top .tbset, .cmp-btn, .fc-btn { flex-shrink:0; }
+  .cmp-btn .lbl, .fc-btn .lbl { display:none; }
+  .live { padding:0; width:40px; justify-content:center; }
+  .live-tx { display:none; }
 }
 
 /* — kleine Phones — */
@@ -332,7 +370,7 @@ body[data-variant="pro"] .tiles { display:grid; }
 
 /* ── Sichtbarer Tastatur-Fokus (Bedienbarkeit per Tastatur) ─────── */
 .scard:focus-visible, .seg button:focus-visible, .sortpills button:focus-visible, .tb:focus-visible,
-.theme-seg button:focus-visible, .cmp-btn:focus-visible, .cmp-row:focus-visible, .cmp-x:focus-visible,
+.theme-seg button:focus-visible, .cmp-btn:focus-visible, .fc-btn:focus-visible, .cmp-row:focus-visible, .cmp-x:focus-visible,
 .icon-btn:focus-visible, .region-sel select:focus-visible, .fc:focus-within {
   outline:2px solid var(--ind); outline-offset:2px;
 }

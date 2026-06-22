@@ -15,12 +15,18 @@
   }
 
   window.TKAPI = {
+    // Adresse des Echtzeit-Stroms (Server-Sent Events): der Browser baut darüber eine dauerhafte
+    // Verbindung auf und wird bei neuen Preisen zum Nachladen aufgefordert (siehe shared.js).
+    STREAM_URL: BASE + '/stream',
     getMeta: () => get('/meta'),
     getRegions: () => get('/regions'),
     getStations: (region, fuel, openOnly) =>
       get('/stations?region=' + encodeURIComponent(region) + '&fuel=' + encodeURIComponent(fuel) + (openOnly ? '&openOnly=true' : '')),
     getHistory: (station, fuel) =>
       get('/history?station=' + encodeURIComponent(station) + '&fuel=' + encodeURIComponent(fuel)),
+    // KI-Vorhersage einer Tankstelle (vorab berechnet, read-only aus der Datenbank).
+    getForecast: (station, fuel) =>
+      get('/forecast?station=' + encodeURIComponent(station) + '&fuel=' + encodeURIComponent(fuel)),
   };
 
   // Markenfarben fuer die Tankstellen-Kacheln (rein kosmetisch, im Frontend gepflegt).

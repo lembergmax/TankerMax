@@ -23,6 +23,9 @@
       <button data-fuel="e5">E5</button><button data-fuel="e10">E10</button><button data-fuel="diesel" class="active">Diesel</button>
     </div>
     <div class="spacer"></div>
+    <div class="live" id="liveStat" data-state="connecting" title="Verbindung wird hergestellt…">
+      <span class="live-dot"></span><span class="live-tx">Verbinde…</span>
+    </div>
     <div class="theme-seg" id="themeSeg">
       <button data-mode="light" title="Hell"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.9" y1="4.9" x2="6.6" y2="6.6"/><line x1="17.4" y1="17.4" x2="19.1" y2="19.1"/><line x1="4.9" y1="19.1" x2="6.6" y2="17.4"/><line x1="17.4" y1="6.6" x2="19.1" y2="4.9"/></svg></button>
       <button data-mode="system" title="System"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></button>
@@ -45,9 +48,10 @@
       <div class="split">
         <div class="chart-card">
           <div class="cc-top">
-            <div class="tbset"><button class="tb" data-tf="300">5m</button><button class="tb" data-tf="900">15m</button><button class="tb active" data-tf="3600">1h</button><button class="tb" data-tf="14400">4h</button><button class="tb" data-tf="86400">1T</button></div>
+            <div class="tbset"><button class="tb" data-tf="300">5m</button><button class="tb" data-tf="900">15m</button><button class="tb active" data-tf="3600">1h</button><button class="tb" data-tf="14400">4h</button><button class="tb" data-tf="86400">1T</button><button class="tb" data-tf="172800">2T</button><button class="tb" data-tf="259200">3T</button><button class="tb" data-tf="432000">5T</button><button class="tb" data-tf="604800">7T</button><button class="tb" data-tf="1209600">14T</button></div>
             <div class="tbset"><button class="tb active" data-ct="candle">Kerzen</button><button class="tb" data-ct="area">Fläche</button><button class="tb" data-ct="line">Linie</button></div>
             <div class="cc-spacer"></div>
+            <button class="fc-btn" id="forecastBtn" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 4 7-8"/><path d="M16 5h5v5"/></svg><span class="lbl">Vorhersage</span></button>
             <button class="cmp-btn" id="cmpBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 3 21 7 17 11"/><line x1="21" y1="7" x2="6" y2="7"/><polyline points="7 21 3 17 7 13"/><line x1="3" y1="17" x2="18" y2="17"/></svg><span class="lbl">Vergleichen</span></button>
           </div>
           <div class="chart-frame" id="chartFrame">
