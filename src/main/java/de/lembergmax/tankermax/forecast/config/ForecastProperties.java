@@ -107,9 +107,14 @@ public class ForecastProperties {
     @Positive
     private int recommendationMaxWaitMinutes = 480;
 
-    /** Obergrenze der Trainingszeilen je Kraftstoffart; darüber wird gleichmäßig ausgedünnt. */
+    /**
+     * Obergrenze der Trainingszeilen je Kraftstoffart; darüber wird gleichmäßig ausgedünnt. Bewusst
+     * Raspberry-Pi-sicher gewählt: Die Merkmalsmatrix bleibt damit deutlich unter dem voreingestellten
+     * Heap-Limit ({@code -Xmx512m}) des systemd-Dienstes. Bei mehr Arbeitsspeicher kann der Wert erhöht
+     * werden.
+     */
     @Positive
-    private long maxTrainRows = 1_200_000;
+    private long maxTrainRows = 400_000;
 
     /** Anzahl der Rechen-Threads des Modells (Smile). */
     @Min(1)
