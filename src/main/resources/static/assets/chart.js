@@ -15,19 +15,19 @@
   };
   const MIN = 60, HOUR = 3600, DAY = 86400;
   // Sichtfenster-Konstanten (benannt statt Magic Numbers):
-  const DEFAULT_WINDOW_S = 2 * DAY;          // Standard-Sichtfenster links von „jetzt" (feine Zeitrahmen)
+  const MIN_WINDOW_S = 2 * HOUR;             // kleinstes Sichtfenster (für sehr feine Zeitrahmen wie 5m)
   const FUTURE_PAD_S = 30 * MIN;             // Rand rechts des letzten Punktes
   // Geladene Historientiefe (muss zu StationQueryService.HISTORY_DAYS passen): das Sichtfenster
   // kann nie weiter zurueckreichen, als Daten vorliegen.
   const HISTORY_MAX_S = 14 * DAY;
-  // Angestrebte Zahl sichtbarer Kerzen, aus der sich das Sichtfenster grober Zeitrahmen ableitet.
-  const TARGET_BARS = 4;
-  // Anfaengliches Sichtfenster zum gewaehlten Zeitrahmen (Aggregations-Bucket): feine Rahmen
-  // (5m … 4h) behalten das Standardfenster, tageweise Rahmen weiten es auf – gedeckelt durch die
-  // geladene Historientiefe –, damit auch breite Kerzen (1T … 14T) als mehrere Balken sichtbar
-  // werden statt nur eines am linken Rand.
+  // Angestrebte Zahl sichtbarer Kerzen, aus der sich das anfängliche Sichtfenster ableitet.
+  const TARGET_BARS = 48;
+  // Anfaengliches Sichtfenster PROPORTIONAL zum gewählten Zeitrahmen (Aggregations-Bucket): jeder
+  // Zeitrahmen zeigt rund TARGET_BARS Kerzen und damit einen sichtbar anderen Ausschnitt – feine
+  // Rahmen (5m/15m/1h/4h) zoomen auf die jüngste Vergangenheit (4 h … 8 T), grobe weiten bis zur
+  // geladenen Historientiefe (14 T). So unterscheiden sich die Zeitrahmen statt gleich auszusehen.
   function windowFor(tf) {
-    return Math.min(HISTORY_MAX_S, Math.max(DEFAULT_WINDOW_S, tf * TARGET_BARS));
+    return Math.min(HISTORY_MAX_S, Math.max(MIN_WINDOW_S, tf * TARGET_BARS));
   }
 
   // Greift verzoegert auf window.TK.esc zu: shared.js laedt nach chart.js, daher
