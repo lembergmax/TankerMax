@@ -7,21 +7,40 @@ import smile.data.Tuple;
 import smile.data.formula.Formula;
 import smile.regression.GradientTreeBoost;
 
+import java.io.Serial;
+import java.io.Serializable;
+import java.util.Arrays;
+
 /**
  * Gradient-Boosting-Modell (Smile) für die Preisvorhersage einer Kraftstoffart.
  *
+ * <p>Vorhergesagt wird nicht der Preis selbst, sondern seine <em>Änderung</em> gegenüber dem
+ * Ausgangspreis (siehe {@link de.lembergmax.tankermax.forecast.training.ForecastModelTrainer}).
+ * Entscheidungsbäume sind stückweise konstant und können nicht extrapolieren; auf das absolute
+ * Preisniveau trainiert müssten sie es über Schnitte am aktuellen Preis nachbilden und würden zum
+ * Median des Trainingsfensters zurückfallen, sobald das Niveau daraus herausläuft. Auf die Änderung
+ * trainiert ist die Zielgröße dagegen stationär und um null zentriert.</p>
+ *
  * <p>Es kapselt bis zu drei Booster: das Hauptmodell minimiert den mittleren absoluten Fehler
- * ({@link Loss#lad()}, entspricht dem L1-Ziel des Python-Vorbilds), die beiden optionalen
- * Quantil-Modelle ({@link Loss#quantile(double)}) schätzen das untere und obere Band der
- * Unsicherheit. Sämtliche Bäume sind reines Java und benötigen keine nativen Bibliotheken, was den
- * Einsatz auf dem Raspberry Pi ermöglicht.</p>
+ * ({@link Loss#lad()}), die beiden optionalen Quantil-Modelle ({@link Loss#quantile(double)})
+ * schätzen das untere und obere Band der Unsicherheit. Sämtliche Bäume sind reines Java und
+ * benötigen keine nativen Bibliotheken, was den Einsatz auf dem Raspberry Pi ermöglicht.</p>
+ *
+ * <p>Das Modell ist serialisierbar, damit das aufwendige Training nur alle paar Tage laufen muss,
+ * während die Vorhersagekurve täglich mit frischen Preisen neu gerechnet wird. Die beim Training
+ * gültigen Merkmalsnamen werden mitgeführt: Ändert sich der Merkmalsvektor durch ein Programm-Update,
+ * lässt sich ein gespeichertes Modell so als unverwendbar erkennen.</p>
  */
-public final class GbdtForecastModel {
+public final class GbdtForecastModel implements Serializable {
+
+    /** Serialisierungskennung. */
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     /** Name der Zielspalte im Trainings-Datensatz. */
     private static final String TARGET = "target";
 
-    /** Hauptmodell (Punktvorhersage). */
+    /** Hauptmodell (Punktvorhersage der Preisänderung). */
     private final GradientTreeBoost main;
 
     /** Quantil-Modell für das untere Band; {@code null}, wenn keine Quantile berechnet werden. */
@@ -50,27 +69,47 @@ public final class GbdtForecastModel {
     }
 
     /**
-     * Trainiert das Modell aus einer Merkmalsmatrix und der zugehörigen Zielgröße.
+     * Liefert die Spaltennamen, die zum Zeitpunkt des Trainings gültig waren.
      *
-     * @param features Merkmalsmatrix (Zeilen = Datenpunkte, Spalten = Merkmale)
-     * @param target   Zielwerte je Datenpunkt
-     * @param props    Hyperparameter und Quantil-Einstellungen
+     * @return Spaltennamen (Merkmale gefolgt von der Zielspalte)
+     */
+    public static String[] columnNames() {
+        final String[] featureNames = ForecastFeatures.featureNames();
+        final String[] names = new String[featureNames.length + 1];
+        System.arraycopy(featureNames, 0, names, 0, featureNames.length);
+        names[featureNames.length] = TARGET;
+        return names;
+    }
+
+    /**
+     * Prüft, ob das Modell zum aktuellen Merkmalsvektor passt.
+     *
+     * @return {@code true}, wenn die Merkmalsnamen unverändert sind
+     */
+    public boolean matchesCurrentFeatures() {
+        return Arrays.equals(columnNames, columnNames());
+    }
+
+    /**
+     * Trainiert das Modell aus der spaltenweise gesammelten Trainingsmatrix.
+     *
+     * <p>Die Matrix wird dabei verbraucht: Ihre Spalten gehen ohne Kopie in den Smile-Datensatz über.</p>
+     *
+     * @param matrix         gesammelte Trainingsbeispiele (Merkmale und Zielspalte)
+     * @param props          Hyperparameter und Quantil-Einstellungen
+     * @param withQuantiles  {@code true}, wenn zusätzlich die beiden Quantil-Modelle zu trainieren sind
      * @return das trainierte Modell
      */
-    public static GbdtForecastModel train(final double[][] features, final double[] target,
-                                          final ForecastProperties props) {
-        final String[] featureNames = ForecastFeatures.featureNames();
-        final String[] columnNames = new String[featureNames.length + 1];
-        System.arraycopy(featureNames, 0, columnNames, 0, featureNames.length);
-        columnNames[featureNames.length] = TARGET;
-
-        final DataFrame data = toDataFrame(features, target, columnNames);
+    public static GbdtForecastModel train(final TrainingMatrix matrix, final ForecastProperties props,
+                                          final boolean withQuantiles) {
+        final String[] columnNames = columnNames();
+        final DataFrame data = matrix.toDataFrame(columnNames);
         final Formula formula = Formula.lhs(TARGET);
 
         final GradientTreeBoost main = fit(formula, data, Loss.lad(), props);
         GradientTreeBoost low = null;
         GradientTreeBoost high = null;
-        if (props.isQuantilesEnabled()) {
+        if (withQuantiles && props.isQuantilesEnabled()) {
             low = fit(formula, data, Loss.quantile(props.getQuantileLow()), props);
             high = fit(formula, data, Loss.quantile(props.getQuantileHigh()), props);
         }
@@ -80,14 +119,15 @@ public final class GbdtForecastModel {
     /**
      * Sagt die Punktvorhersage sowie – falls vorhanden – das untere und obere Band voraus.
      *
-     * <p>Die Band-Grenzen werden monoton erzwungen, sodass stets {@code low ≤ Punkt ≤ high} gilt.</p>
+     * <p>Alle Werte sind Preis<em>änderungen</em> gegenüber dem Ausgangspreis. Die Band-Grenzen werden
+     * monoton erzwungen, sodass stets {@code low ≤ Punkt ≤ high} gilt.</p>
      *
-     * @param features Merkmalsmatrix der vorherzusagenden Datenpunkte
+     * @param features Merkmalsmatrix der vorherzusagenden Datenpunkte (zeilenweise)
      * @return Vorhersage mit Punktwerten und – sofern trainiert – Bandgrenzen
      */
     public Prediction predict(final double[][] features) {
         final int rows = features.length;
-        final DataFrame frame = toDataFrame(features, new double[rows], columnNames);
+        final DataFrame frame = toDataFrame(features);
         final double[] point = new double[rows];
         final double[] lowOut = low == null ? null : new double[rows];
         final double[] highOut = high == null ? null : new double[rows];
@@ -124,27 +164,28 @@ public final class GbdtForecastModel {
     }
 
     /**
-     * Baut einen Smile-Datensatz aus Merkmalsmatrix und Zielwerten.
+     * Baut einen Smile-Datensatz für die Inferenz aus einer zeilenweisen Merkmalsmatrix.
      *
-     * @param features    Merkmalsmatrix
-     * @param target      Zielwerte (bei der Inferenz Platzhalter)
-     * @param columnNames Spaltennamen (Merkmale gefolgt von der Zielspalte)
+     * <p>Die Zielspalte wird mit Platzhaltern gefüllt, weil die Modellformel sie im Schema erwartet.
+     * Bei der Inferenz fallen je Tankstelle nur wenige Dutzend Zeilen an, sodass die spaltenweise
+     * Umsortierung hier nicht ins Gewicht fällt.</p>
+     *
+     * @param features zeilenweise Merkmalsmatrix
      * @return der Datensatz
      */
-    private static DataFrame toDataFrame(final double[][] features, final double[] target,
-                                         final String[] columnNames) {
+    private DataFrame toDataFrame(final double[][] features) {
         final int rows = features.length;
         final int featureCount = columnNames.length - 1;
-        final double[][] matrix = new double[rows][columnNames.length];
-        for (int row = 0; row < rows; row++) {
-            System.arraycopy(features[row], 0, matrix[row], 0, featureCount);
-            matrix[row][featureCount] = target[row];
+        final TrainingMatrix matrix = new TrainingMatrix(featureCount, rows);
+        for (final double[] row : features) {
+            matrix.add(row, 0.0);
         }
-        return DataFrame.of(matrix, columnNames);
+        return matrix.toDataFrame(columnNames);
     }
 
     /**
-     * Vorhersage-Ergebnis einer Merkmalsmatrix.
+     * Vorhersage-Ergebnis einer Merkmalsmatrix; alle Werte sind Preisänderungen gegenüber dem
+     * Ausgangspreis.
      *
      * @param point Punktvorhersage je Datenpunkt
      * @param low   unteres Band (q10) je Datenpunkt oder {@code null}, wenn keine Quantile berechnet wurden

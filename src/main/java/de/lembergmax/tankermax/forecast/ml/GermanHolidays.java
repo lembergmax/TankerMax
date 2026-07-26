@@ -3,7 +3,10 @@ package de.lembergmax.tankermax.forecast.ml;
 import lombok.experimental.UtilityClass;
 
 import java.time.LocalDate;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Ermittelt gesetzliche Feiertage in Deutschland – bundesweit sowie für die häufigsten
@@ -35,6 +38,19 @@ public class GermanHolidays {
     /** Bundesländer mit Internationalem Frauentag (8. März). */
     private final Set<String> WOMENS_DAY = Set.of("BE", "MV");
 
+    /** Sammelschlüssel für eine fehlende Bundesland-Angabe. */
+    private final String NO_STATE = "";
+
+    /**
+     * Zwischenspeicher der Feiertage je Bundesland-Angabe und Jahr.
+     *
+     * <p>Beim Training werden mehrere Millionen Merkmalsvektoren gebildet, die alle die Feiertagslage
+     * abfragen. Ohne Zwischenspeicher würde je Abfrage das Osterdatum neu berechnet und die
+     * Bundesland-Angabe neu normalisiert. Die Feiertage eines Jahres werden daher einmalig ermittelt
+     * und danach nur noch nachgeschlagen.</p>
+     */
+    private final Map<String, Map<Integer, Set<LocalDate>>> CACHE = new ConcurrentHashMap<>();
+
     /**
      * Prüft, ob das Datum im angegebenen Bundesland ein gesetzlicher Feiertag ist.
      *
@@ -46,15 +62,39 @@ public class GermanHolidays {
         if (date == null) {
             return false;
         }
-        final LocalDate easter = easterSunday(date.getYear());
-        if (isNationwide(date, easter)) {
-            return true;
-        }
+        return holidaysOf(state == null ? NO_STATE : state, date.getYear()).contains(date);
+    }
+
+    /**
+     * Liefert die zwischengespeicherten Feiertage einer Bundesland-Angabe für ein Jahr.
+     *
+     * @param state Bundesland-Angabe (nie {@code null})
+     * @param year  Jahr
+     * @return Feiertage des Jahres
+     */
+    private Set<LocalDate> holidaysOf(final String state, final int year) {
+        return CACHE.computeIfAbsent(state, key -> new ConcurrentHashMap<>())
+                .computeIfAbsent(year, key -> buildHolidays(state, key));
+    }
+
+    /**
+     * Ermittelt alle Feiertage eines Jahres für eine Bundesland-Angabe.
+     *
+     * @param state Bundesland-Angabe
+     * @param year  Jahr
+     * @return Feiertage des Jahres
+     */
+    private Set<LocalDate> buildHolidays(final String state, final int year) {
+        final LocalDate easter = easterSunday(year);
         final String code = normalizeState(state);
-        if (code == null) {
-            return false;
+        final Set<LocalDate> days = new HashSet<>();
+        final LocalDate end = LocalDate.of(year + 1, 1, 1);
+        for (LocalDate day = LocalDate.of(year, 1, 1); day.isBefore(end); day = day.plusDays(1)) {
+            if (isNationwide(day, easter) || (code != null && isRegional(day, easter, code))) {
+                days.add(day);
+            }
         }
-        return isRegional(date, easter, code);
+        return days;
     }
 
     /**

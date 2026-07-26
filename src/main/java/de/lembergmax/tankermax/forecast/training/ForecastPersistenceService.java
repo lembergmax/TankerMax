@@ -47,6 +47,13 @@ public class ForecastPersistenceService {
     /** Sekunden je Tag. */
     private static final long SECONDS_PER_DAY = 86_400L;
 
+    /**
+     * Anzahl der Kurvenpunkte, nach der zwischenzeitlich geschrieben wird. Bei stündlicher Auflösung
+     * fallen je Kraftstoffart rund {@code Tankstellen × 72} Zeilen an; das stückweise Schreiben hält
+     * die Sammelliste klein und lässt Hibernate früher stapelweise senden.
+     */
+    private static final int CURVE_CHUNK = 2_000;
+
     /** Repository der Vorhersageläufe. */
     private final ForecastRunRepository runRepository;
 
@@ -82,19 +89,36 @@ public class ForecastPersistenceService {
         run.setTrainMae(result.trainMae());
         runRepository.save(run);
 
-        final List<FuelPriceForecast> curveBatch = new ArrayList<>();
+        final List<FuelPriceForecast> curveBatch = new ArrayList<>(CURVE_CHUNK);
         final List<ForecastDailySummary> summaryBatch = new ArrayList<>();
         for (final StationForecast stationForecast : result.stations()) {
             final Station stationRef = stationRepository.getReferenceById(stationForecast.stationId());
             for (final CurvePoint point : stationForecast.curve()) {
                 curveBatch.add(toCurveEntity(run, stationRef, point));
+                if (curveBatch.size() >= CURVE_CHUNK) {
+                    flushCurve(curveBatch);
+                }
             }
             for (final DailyPoint daily : stationForecast.dailies()) {
                 summaryBatch.add(toSummaryEntity(fuelTypeId, fuelRef, stationRef, result, daily));
             }
         }
-        forecastRepository.saveAll(curveBatch);
+        flushCurve(curveBatch);
         summaryRepository.saveAll(summaryBatch);
+    }
+
+    /**
+     * Schreibt die gesammelten Kurvenpunkte und leert die Sammelliste.
+     *
+     * @param curveBatch gesammelte Kurvenpunkte
+     */
+    private void flushCurve(final List<FuelPriceForecast> curveBatch) {
+        if (curveBatch.isEmpty()) {
+            return;
+        }
+        forecastRepository.saveAll(curveBatch);
+        forecastRepository.flush();
+        curveBatch.clear();
     }
 
     /**

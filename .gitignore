@@ -36,3 +36,7 @@ build/
 ### Other ###
 /.mvn/
 /CLAUDE.md
+
+### Laufzeitdaten ###
+# Serialisierte KI-Modelle (tankermax.forecast.model-store-path); werden beim Lauf neu erzeugt.
+/data/

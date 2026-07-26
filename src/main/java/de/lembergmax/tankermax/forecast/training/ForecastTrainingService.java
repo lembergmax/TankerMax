@@ -3,10 +3,11 @@ package de.lembergmax.tankermax.forecast.training;
 import de.lembergmax.tankermax.forecast.config.ForecastProperties;
 import de.lembergmax.tankermax.forecast.ml.ForecastContext;
 import de.lembergmax.tankermax.forecast.ml.StationObservations;
+import de.lembergmax.tankermax.forecast.ml.TrainedModel;
+import de.lembergmax.tankermax.forecast.repository.ForecastRunRepository;
 import de.lembergmax.tankermax.forecast.training.ForecastModelTrainer.Result;
 import de.lembergmax.tankermax.polling.domain.FuelType;
 import de.lembergmax.tankermax.polling.repository.FuelTypeRepository;
-import de.lembergmax.tankermax.forecast.repository.ForecastRunRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -18,6 +19,7 @@ import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -25,18 +27,25 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Steuert das tägliche Neutraining der Preisvorhersage und das einmalige Nachholen nach einem Neustart.
+ * Steuert den täglichen Vorhersagelauf und das seltenere Neutraining des Modells.
  *
- * <p>Der {@link Scheduled}-Cron stößt das Training täglich zum konfigurierten Zeitpunkt (Standard
- * 0:00 Uhr) an. Zusätzlich plant der {@link ApplicationRunner} kurz nach dem Start einen Nachhol-Lauf,
- * falls für den heutigen Tag noch keine Vorhersage vorliegt (etwa nach einem Neustart tagsüber). Ein
- * {@link ReentrantLock} stellt sicher, dass nie zwei Läufe gleichzeitig arbeiten. Je Kraftstoffart
- * werden die Historie geladen, das Modell trainiert, die Kurve und die Tageszusammenfassungen
- * gespeichert sowie die Selbstkorrektur fortgeschrieben; danach werden vergangene Vorhersagen
- * abgeglichen und alte Daten aufgeräumt. Nur im Profil {@code ingest} aktiv.</p>
+ * <p>Training und Vorhersage laufen bewusst in unterschiedlichem Takt. Das Modell wird nur alle
+ * {@code train-interval-days} Tage neu gebildet – dafür über den vollen Datenbestand und mit
+ * entsprechend großzügigen Hyperparametern. Die Vorhersagekurve dagegen entsteht bei jedem Lauf neu,
+ * also täglich, weil sie auf dem aktuellen Preis als Ausgangswert aufsetzt: Bei einem Horizont von
+ * 72 Stunden wäre eine drei Tage alte Kurve am Ende ihres Zeitraums nicht nur leer, sondern auch von
+ * einem drei Tage alten Ausgangspreis abgeleitet.</p>
+ *
+ * <p>Ob trainiert wird, entscheidet das Alter des gespeicherten Modells, nicht der Cron-Ausdruck:
+ * {@code &#42;/3} im Tagesfeld eines Cron feuert an den Monatstagen 1, 4, … 28, 31 und ergäbe am
+ * Monatswechsel einen Abstand von einem oder zwei Tagen. Zusätzlich plant der {@link ApplicationRunner}
+ * kurz nach dem Start einen Nachhol-Lauf, falls für heute noch keine Vorhersage vorliegt. Ein
+ * {@link ReentrantLock} stellt sicher, dass nie zwei Läufe gleichzeitig arbeiten. Nur im Profil
+ * {@code ingest} aktiv.</p>
  */
 @Service
 @Profile("ingest")
@@ -49,7 +58,7 @@ public class ForecastTrainingService implements ApplicationRunner {
     /** Zeitzone, in der „heute" für den Nachhol-Lauf bestimmt wird. */
     private static final ZoneId BERLIN = ZoneId.of("Europe/Berlin");
 
-    /** Kraftstoffarten, für die nacheinander trainiert wird. */
+    /** Kraftstoffarten, für die nacheinander gerechnet wird. */
     private static final List<String> FUEL_CODES = List.of("E5", "E10", "DIESEL");
 
     /** Verzögerung des Nachhol-Laufs nach dem Start in Sekunden (lässt die Startphase abklingen). */
@@ -57,6 +66,9 @@ public class ForecastTrainingService implements ApplicationRunner {
 
     /** Sekunden je Minute, zur Umrechnung der Auflösung. */
     private static final long SECONDS_PER_MINUTE = 60;
+
+    /** Sekunden je Tag. */
+    private static final long SECONDS_PER_DAY = 86_400L;
 
     /** Sperre gegen gleichzeitige Läufe. */
     private final ReentrantLock lock = new ReentrantLock();
@@ -69,6 +81,9 @@ public class ForecastTrainingService implements ApplicationRunner {
 
     /** Trainiert das Modell und erzeugt die Vorhersage. */
     private final ForecastModelTrainer trainer;
+
+    /** Legt trainierte Modelle ab und lädt sie wieder. */
+    private final ForecastModelStore modelStore;
 
     /** Misst und schreibt die Selbstkorrektur fort. */
     private final ForecastFeedbackService feedbackService;
@@ -90,7 +105,7 @@ public class ForecastTrainingService implements ApplicationRunner {
 
     /**
      * Begrenzt die Rechen-Threads des Modells (Smile) auf den konfigurierten Wert, damit das Training
-     * den Raspberry Pi nicht auslastet.
+     * den Raspberry Pi nicht vollständig auslastet.
      */
     @PostConstruct
     public void configureModelThreads() {
@@ -111,10 +126,10 @@ public class ForecastTrainingService implements ApplicationRunner {
     }
 
     /**
-     * Führt das tägliche Neutraining zum konfigurierten Zeitpunkt aus.
+     * Führt den täglichen Vorhersagelauf zum konfigurierten Zeitpunkt aus.
      */
-    @Scheduled(cron = "${tankermax.forecast.train-cron}", zone = "${tankermax.forecast.train-zone}")
-    public void scheduledTraining() {
+    @Scheduled(cron = "${tankermax.forecast.cycle-cron}", zone = "${tankermax.forecast.cycle-zone}")
+    public void scheduledCycle() {
         if (!props.isEnabled()) {
             return;
         }
@@ -133,9 +148,9 @@ public class ForecastTrainingService implements ApplicationRunner {
     }
 
     /**
-     * Prüft, ob heute bereits ein Vorhersagelauf erzeugt wurde.
+     * Prüft, ob heute bereits eine Vorhersage erzeugt wurde.
      *
-     * @return {@code true}, wenn heute bereits trainiert wurde
+     * @return {@code true}, wenn heute bereits ein Lauf stattfand
      */
     private boolean hasRunToday() {
         final Instant startOfToday = LocalDate.now(BERLIN).atStartOfDay(BERLIN).toInstant();
@@ -143,19 +158,19 @@ public class ForecastTrainingService implements ApplicationRunner {
     }
 
     /**
-     * Führt einen vollständigen Vorhersagelauf über alle Kraftstoffarten aus, sofern nicht bereits
-     * einer läuft.
+     * Führt einen vollständigen Lauf über alle Kraftstoffarten aus, sofern nicht bereits einer läuft.
      */
     private void runCycle() {
         if (!lock.tryLock()) {
-            LOG.info("Vorhersage-Training läuft bereits – dieser Lauf wird übersprungen.");
+            LOG.info("Vorhersagelauf läuft bereits – dieser Lauf wird übersprungen.");
             return;
         }
         try {
             final Instant now = Instant.now();
             final long stepSeconds = (long) props.getResolutionMinutes() * SECONDS_PER_MINUTE;
-            final LocalDateTime windowStart = LocalDateTime.now(ZoneOffset.UTC).minusDays(props.getTrainWindowDays());
-            LOG.info("===== KI-Vorhersage: Training START =====");
+            final LocalDateTime windowStart = LocalDateTime.now(ZoneOffset.UTC)
+                    .minusDays(props.getTrainWindowDays());
+            LOG.info("===== KI-Vorhersage: Lauf START =====");
             for (final String code : FUEL_CODES) {
                 try {
                     processFuel(code, windowStart, stepSeconds, now);
@@ -166,17 +181,18 @@ public class ForecastTrainingService implements ApplicationRunner {
             }
             accuracyService.evaluatePending(props);
             persistenceService.prune(now, props);
-            LOG.info("===== KI-Vorhersage: Training ENDE =====");
+            LOG.info("===== KI-Vorhersage: Lauf ENDE =====");
         } finally {
             lock.unlock();
         }
     }
 
     /**
-     * Führt Laden, Training, Inferenz, Speichern und Selbstkorrektur für eine Kraftstoffart aus.
+     * Führt Laden, gegebenenfalls Training, Inferenz, Speichern und Selbstkorrektur für eine
+     * Kraftstoffart aus.
      *
      * @param code        Datenbank-Code des Kraftstoffs
-     * @param windowStart Beginn des Trainingsfensters (UTC)
+     * @param windowStart Beginn des Datenfensters (UTC)
      * @param stepSeconds Rasterabstand in Sekunden
      * @param now         Zeitpunkt des Laufs
      */
@@ -193,17 +209,62 @@ public class ForecastTrainingService implements ApplicationRunner {
             return;
         }
         final ForecastContext ctx = ForecastContext.build(observations, now.getEpochSecond(), stepSeconds);
-        final Map<String, double[]> bias = feedbackService.loadBias(fuelType.getId());
-        final Result result = trainer.trainAndInfer(code, ctx, bias, now);
-        if (result == null) {
+        final TrainedModel trained = obtainModel(code, ctx, now);
+        if (trained == null) {
             LOG.info("Zu wenig Historie für ein Modell ({}) – Vorhersage übersprungen.", code);
             return;
         }
+
+        final Map<String, double[]> bias = feedbackService.loadBias(fuelType.getId());
+        final Instant startedAt = Instant.now();
+        final Result result = trainer.infer(code, ctx, trained, bias, now);
         persistenceService.persist(fuelType.getId(), result);
         feedbackService.recompute(fuelType, ctx, now, props);
-        LOG.info("Vorhersage {}: {} Tankstellen, {} Trainingszeilen, Validierungs-MAE {}",
-                code, result.stations().size(), result.trainRows(),
-                result.trainMae() == null ? "n/v" : String.format("%.3f ct", result.trainMae()));
+        LOG.info("Vorhersage {}: {} Tankstellen in {} s, Modell vom {} ({} Trainingszeilen, "
+                        + "Validierungs-MAE {}).",
+                code, result.stations().size(), Duration.between(startedAt, Instant.now()).toSeconds(),
+                trained.trainedAt(), trained.trainRows(),
+                trained.trainMae() == null ? "n/v" : String.format("%.3f ct", trained.trainMae()));
+    }
+
+    /**
+     * Liefert das zu verwendende Modell: das gespeicherte, solange es jung genug ist, sonst ein frisch
+     * trainiertes.
+     *
+     * @param code Datenbank-Code des Kraftstoffs
+     * @param ctx  vorberechneter Kontext aller Tankstellen
+     * @param now  Zeitpunkt des Laufs
+     * @return Modell oder {@code null}, wenn kein Modell gebildet werden konnte
+     */
+    private TrainedModel obtainModel(final String code, final ForecastContext ctx, final Instant now) {
+        final Optional<TrainedModel> stored = modelStore.load(code);
+        if (stored.isPresent() && !isStale(stored.get(), now)) {
+            return stored.get();
+        }
+        LOG.info("Vorhersage {}: Neutraining beginnt ({}).", code,
+                stored.isEmpty() ? "kein verwendbares Modell vorhanden"
+                        : "gespeichertes Modell ist älter als " + props.getTrainIntervalDays() + " Tage");
+        final Instant startedAt = Instant.now();
+        final TrainedModel trained = trainer.train(code, ctx, now);
+        if (trained == null) {
+            return stored.orElse(null);
+        }
+        LOG.info("Vorhersage {}: Neutraining abgeschlossen in {} min.", code,
+                Duration.between(startedAt, Instant.now()).toMinutes());
+        modelStore.save(code, trained);
+        return trained;
+    }
+
+    /**
+     * Prüft, ob ein gespeichertes Modell neu trainiert werden muss.
+     *
+     * @param trained gespeichertes Modell
+     * @param now     Zeitpunkt des Laufs
+     * @return {@code true}, wenn das Modell älter als der eingestellte Abstand ist
+     */
+    private boolean isStale(final TrainedModel trained, final Instant now) {
+        return trained.trainedAt()
+                .isBefore(now.minusSeconds((long) props.getTrainIntervalDays() * SECONDS_PER_DAY));
     }
 
 }

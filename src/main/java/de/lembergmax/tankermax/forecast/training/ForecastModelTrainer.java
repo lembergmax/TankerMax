@@ -6,7 +6,11 @@ import de.lembergmax.tankermax.forecast.ml.ForecastContext;
 import de.lembergmax.tankermax.forecast.ml.ForecastFeatures;
 import de.lembergmax.tankermax.forecast.ml.GbdtForecastModel;
 import de.lembergmax.tankermax.forecast.ml.HourlyGrid;
+import de.lembergmax.tankermax.forecast.ml.TrainedModel;
+import de.lembergmax.tankermax.forecast.ml.TrainingMatrix;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
@@ -14,27 +18,40 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 /**
  * Trainiert das Vorhersagemodell einer Kraftstoffart und erzeugt daraus die Vorhersagekurve samt
  * Tageszusammenfassungen.
  *
- * <p>Aus dem Zeitraster aller Tankstellen werden Trainingsbeispiele der Form (Merkmale → Preis am
- * Zielzeitpunkt) gebildet, wobei der Horizont selbst ein Merkmal ist (ein gemeinsames Modell je
- * Kraftstoffart liefert dennoch eine individuelle Kurve je Tankstelle). Die jüngsten Tage dienen als
- * zeitlicher Validierungsausschnitt zur Messung des mittleren absoluten Fehlers; die Anzahl der
- * Trainingszeilen wird auf {@code tankermax.forecast.max-train-rows} gedeckelt, um den Arbeitsspeicher
- * des Raspberry Pi zu schonen. Anschließend wird je Tankstelle die Kurve über den vollen Horizont
- * vorhergesagt, um die gemessene Selbstkorrektur gegengerechnet und zu Tageskennzahlen samt Tanktipp
- * verdichtet. Reine Rechenarbeit ohne Datenbankzugriff; nur im Profil {@code ingest} aktiv.</p>
+ * <p>Zielgröße des Modells ist die <em>Preisänderung</em> gegenüber dem Ausgangspreis, nicht der
+ * Preis selbst. Der Horizont ist dabei ein Merkmal, sodass ein gemeinsames Modell je Kraftstoffart
+ * dennoch eine individuelle Kurve je Tankstelle liefert. Bei der Inferenz wird der Ausgangspreis
+ * wieder aufaddiert.</p>
+ *
+ * <p>Die Trainingsstichprobe deckt standardmäßig jeden Rasterpunkt als Ausgangszeitpunkt und jeden
+ * ausgelieferten Horizont ab. Übersteigt das die konfigurierte Zeilenzahl, wird <em>zufällig</em> mit
+ * festem Startwert ausgedünnt. Ein gleichmäßiges „jedes n-te Beispiel“ wäre hier fehlerhaft: Da die
+ * innere Schleife über eine feste Zahl von Horizonten läuft, bliebe die Phase über alle Blöcke
+ * erhalten und es überlebten immer dieselben wenigen Horizonte.</p>
+ *
+ * <p>Die jüngsten Tage bilden den Validierungsausschnitt. Beispiele, deren Zielzeitpunkt dort
+ * hineinreicht, werden zusätzlich aus dem Training entfernt (Sperrzone), damit der gemessene Fehler
+ * nicht beschönigt wird. Ist {@code refit-on-full-data} aktiv, dient dieser Schnitt nur der Messung
+ * und das ausgelieferte Modell wird anschließend über den gesamten Zeitraum neu gebildet.</p>
+ *
+ * <p>Reine Rechenarbeit ohne Datenbankzugriff; nur im Profil {@code ingest} aktiv.</p>
  */
 @Service
 @Profile("ingest")
 @RequiredArgsConstructor
 public class ForecastModelTrainer {
+
+    /** Logger dieser Klasse. */
+    private static final Logger LOG = LoggerFactory.getLogger(ForecastModelTrainer.class);
 
     /** Zeitzone, in der Vorhersagetage und Tanktipp bestimmt werden. */
     private static final ZoneId BERLIN = ZoneId.of("Europe/Berlin");
@@ -48,241 +65,321 @@ public class ForecastModelTrainer {
     /** Sekunden je Tag. */
     private static final long SECONDS_PER_DAY = 86_400L;
 
-    /** Länge des Validierungsausschnitts in Tagen (jüngste Ausgangszeitpunkte). */
-    private static final int VALIDATION_DAYS = 7;
+    /** Cent-Faktor zur Umrechnung eines Euro-Betrags. */
+    private static final double CENT_FACTOR = 100.0;
+
+    /**
+     * Vorlauf in Stunden, bevor ein Rasterpunkt als Ausgangszeitpunkt dient. Entspricht dem längsten
+     * Verzögerungswert (eine Woche): Davor wäre der Wochen-Lag am Rasteranfang abgeschnitten und würde
+     * fälschlich eine unveränderte Woche vortäuschen.
+     */
+    private static final int WARMUP_HOURS = 168;
 
     /** Obergrenze der Validierungszeilen. */
     private static final int VALIDATION_CAP = 200_000;
+
+    /** Beschriftungen der Horizont-Abschnitte für die Fehlerausgabe. */
+    private static final String[] BUCKET_LABELS = {"<=2h", "<=6h", "<=12h", ">12h"};
 
     /** Konfiguration der Vorhersage. */
     private final ForecastProperties props;
 
     /**
-     * Trainiert das Modell und erzeugt die Vorhersage einer Kraftstoffart.
+     * Trainiert das Modell einer Kraftstoffart.
+     *
+     * @param fuelCode Datenbank-Code des Kraftstoffs (nur für die Protokollausgabe)
+     * @param ctx      vorberechneter Kontext aller Tankstellen
+     * @param now      Zeitpunkt dieses Trainingslaufs
+     * @return trainiertes Modell oder {@code null}, wenn zu wenige Trainingsdaten vorliegen
+     */
+    public TrainedModel train(final String fuelCode, final ForecastContext ctx, final Instant now) {
+        final Layout layout = Layout.of(ctx, props);
+        final long cutoff = now.getEpochSecond() - (long) props.getValidationDays() * SECONDS_PER_DAY;
+        final long[] totals = count(ctx, layout, cutoff);
+        final long trainTotal = totals[0];
+        final long validTotal = totals[1];
+        final long fullTotal = totals[2];
+        if (fullTotal == 0) {
+            return null;
+        }
+
+        Double mae = null;
+        if (trainTotal > 0 && validTotal > 0) {
+            mae = measure(fuelCode, ctx, layout, cutoff, trainTotal, validTotal);
+        }
+
+        final boolean refit = props.isRefitOnFullData() || mae == null;
+        final Part shippedPart = refit ? Part.FULL : Part.TRAIN;
+        final long shippedTotal = refit ? fullTotal : trainTotal;
+        final TrainingMatrix matrix = collect(ctx, layout, cutoff, shippedPart, shippedTotal,
+                props.getMaxTrainRows());
+        if (matrix.isEmpty()) {
+            return null;
+        }
+        final int trainRows = matrix.rows();
+        LOG.info("Vorhersage {}: Modelltraining auf {} Zeilen ({}).", fuelCode, trainRows,
+                refit ? "gesamter Zeitraum" : "ohne Validierungsausschnitt");
+        final GbdtForecastModel model = GbdtForecastModel.train(matrix, props, true);
+        return new TrainedModel(model, now, String.valueOf(now.getEpochSecond()), trainRows, mae);
+    }
+
+    /**
+     * Erzeugt die Vorhersagekurve und die Tageszusammenfassungen aus einem trainierten Modell.
      *
      * @param fuelCode      Datenbank-Code des Kraftstoffs
      * @param ctx           vorberechneter Kontext aller Tankstellen
+     * @param trained       trainiertes Modell samt Kennzahlen
      * @param biasByStation Selbstkorrektur je Tankstelle (Cent je Horizont-Abschnitt) oder leer
-     * @param now           Erzeugungszeitpunkt dieses Laufs
-     * @return Vorhersage-Ergebnis oder {@code null}, wenn zu wenige Trainingsdaten vorliegen
+     * @param now           Zeitpunkt dieses Vorhersagelaufs
+     * @return Vorhersage-Ergebnis
      */
-    public Result trainAndInfer(final String fuelCode, final ForecastContext ctx,
-                                final Map<String, double[]> biasByStation, final Instant now) {
-        final int sph = ctx.stepsPerHour();
-        final long stepSeconds = ctx.stepSeconds();
-        final int horizonSteps = props.getHorizonHours() * sph;
-        final int originStep = Math.max(1, props.getTrainOriginStepHours() * sph);
-        final int horizonStep = Math.max(1, props.getTrainHorizonStepHours() * sph);
-        final int minHistorySteps = props.getMinHistoryDays() * 24 * sph;
-        final int lagWarmup = 24 * sph;
-        final long validationCutoff = now.getEpochSecond() - (long) VALIDATION_DAYS * SECONDS_PER_DAY;
-
-        final long[] counts = countSamples(ctx, minHistorySteps, lagWarmup, originStep,
-                horizonStep, horizonSteps, validationCutoff);
-        final long trainTotal = counts[0];
-        final long validTotal = counts[1];
-        if (trainTotal == 0) {
-            return null;
-        }
-        final int trainStride = (int) Math.max(1, (trainTotal + props.getMaxTrainRows() - 1) / props.getMaxTrainRows());
-        final int validStride = (int) Math.max(1, (validTotal + VALIDATION_CAP - 1) / VALIDATION_CAP);
-
-        final Samples samples = collectSamples(ctx, minHistorySteps, lagWarmup, originStep, horizonStep,
-                horizonSteps, validationCutoff, trainStride, validStride,
-                (int) Math.min(props.getMaxTrainRows(), trainTotal),
-                (int) Math.min(VALIDATION_CAP, validTotal));
-        if (samples.trainCount == 0) {
-            return null;
-        }
-
-        final double[][] trainX = Arrays.copyOf(samples.trainX, samples.trainCount);
-        final double[] trainY = Arrays.copyOf(samples.trainY, samples.trainCount);
-        final GbdtForecastModel model = GbdtForecastModel.train(trainX, trainY, props);
-        final Double mae = validationMae(model, samples);
-
-        final List<StationForecast> stations = infer(ctx, model, biasByStation, horizonSteps, stepSeconds, minHistorySteps);
-        final long originEpoch = floorToStep(now.getEpochSecond(), stepSeconds);
-        final String modelVersion = String.valueOf(now.getEpochSecond());
-        return new Result(fuelCode, now, Instant.ofEpochSecond(originEpoch), props.getHorizonHours(),
-                props.getResolutionMinutes(), modelVersion, samples.trainCount, mae, stations);
-    }
-
-    /**
-     * Zählt die möglichen Trainings- und Validierungsbeispiele, um die Stichproben-Schrittweite und
-     * die Feldgrößen vorab festzulegen.
-     *
-     * @param ctx              Kontext
-     * @param minHistorySteps  Mindesthistorie in Rasterschritten
-     * @param lagWarmup        Vorlauf für die Verzögerungs-Features
-     * @param originStep       Abstand der Ausgangszeitpunkte
-     * @param horizonStep      Abstand der Horizonte
-     * @param horizonSteps     größter Horizont in Rasterschritten
-     * @param validationCutoff Grenze, ab der ein Ausgangszeitpunkt zur Validierung zählt
-     * @return Array {Anzahl Trainingsbeispiele, Anzahl Validierungsbeispiele}
-     */
-    private long[] countSamples(final ForecastContext ctx, final int minHistorySteps, final int lagWarmup,
-                                final int originStep, final int horizonStep, final int horizonSteps,
-                                final long validationCutoff) {
-        long train = 0;
-        long valid = 0;
-        for (final String stationId : ctx.stationIds()) {
-            final HourlyGrid grid = ctx.grid(stationId);
-            if (grid.size() < minHistorySteps) {
-                continue;
-            }
-            final int last = grid.lastIndex();
-            for (int origin = lagWarmup; origin <= last - 1; origin += originStep) {
-                final boolean isValidation = grid.timeAt(origin) >= validationCutoff;
-                for (int h = horizonStep; h <= horizonSteps; h += horizonStep) {
-                    if (origin + h > last) {
-                        break;
-                    }
-                    if (isValidation) {
-                        valid++;
-                    } else {
-                        train++;
-                    }
-                }
-            }
-        }
-        return new long[]{train, valid};
-    }
-
-    /**
-     * Baut die Trainings- und Validierungsmatrizen anhand der vorab bestimmten Schrittweiten.
-     *
-     * @param ctx              Kontext
-     * @param minHistorySteps  Mindesthistorie in Rasterschritten
-     * @param lagWarmup        Vorlauf für die Verzögerungs-Features
-     * @param originStep       Abstand der Ausgangszeitpunkte
-     * @param horizonStep      Abstand der Horizonte
-     * @param horizonSteps     größter Horizont in Rasterschritten
-     * @param validationCutoff Grenze, ab der ein Ausgangszeitpunkt zur Validierung zählt
-     * @param trainStride      nur jedes n-te Trainingsbeispiel wird übernommen
-     * @param validStride      nur jedes n-te Validierungsbeispiel wird übernommen
-     * @param trainCapacity    Feldgröße für die Trainingsbeispiele
-     * @param validCapacity    Feldgröße für die Validierungsbeispiele
-     * @return gefüllte Stichproben
-     */
-    private Samples collectSamples(final ForecastContext ctx, final int minHistorySteps, final int lagWarmup,
-                                   final int originStep, final int horizonStep, final int horizonSteps,
-                                   final long validationCutoff, final int trainStride, final int validStride,
-                                   final int trainCapacity, final int validCapacity) {
-        final Samples samples = new Samples(trainCapacity, validCapacity);
-        long trainSeen = 0;
-        long validSeen = 0;
-        for (final String stationId : ctx.stationIds()) {
-            final HourlyGrid grid = ctx.grid(stationId);
-            if (grid.size() < minHistorySteps) {
-                continue;
-            }
-            final int last = grid.lastIndex();
-            for (int origin = lagWarmup; origin <= last - 1; origin += originStep) {
-                final boolean isValidation = grid.timeAt(origin) >= validationCutoff;
-                for (int h = horizonStep; h <= horizonSteps; h += horizonStep) {
-                    if (origin + h > last) {
-                        break;
-                    }
-                    final double target = grid.priceAt(origin + h);
-                    if (isValidation) {
-                        if (validSeen % validStride == 0 && samples.validCount < validCapacity) {
-                            samples.validX[samples.validCount] = ForecastFeatures.build(ctx, stationId, origin, h);
-                            samples.validY[samples.validCount] = target;
-                            samples.validCount++;
-                        }
-                        validSeen++;
-                    } else {
-                        if (trainSeen % trainStride == 0 && samples.trainCount < trainCapacity) {
-                            samples.trainX[samples.trainCount] = ForecastFeatures.build(ctx, stationId, origin, h);
-                            samples.trainY[samples.trainCount] = target;
-                            samples.trainCount++;
-                        }
-                        trainSeen++;
-                    }
-                }
-            }
-        }
-        return samples;
-    }
-
-    /**
-     * Misst den mittleren absoluten Fehler (Cent/Liter) auf dem Validierungsausschnitt.
-     *
-     * @param model   trainiertes Modell
-     * @param samples Stichproben mit Validierungsteil
-     * @return mittlerer absoluter Fehler in Cent/Liter oder {@code null}, wenn kein Validierungsteil vorliegt
-     */
-    private Double validationMae(final GbdtForecastModel model, final Samples samples) {
-        if (samples.validCount == 0) {
-            return null;
-        }
-        final double[][] validX = Arrays.copyOf(samples.validX, samples.validCount);
-        final double[] predicted = model.predict(validX).point();
-        double sum = 0.0;
-        for (int i = 0; i < samples.validCount; i++) {
-            sum += Math.abs(predicted[i] - samples.validY[i]);
-        }
-        return sum / samples.validCount * 100.0;
-    }
-
-    /**
-     * Sagt je Tankstelle die volle Kurve voraus, rechnet die Selbstkorrektur gegen und verdichtet zu
-     * Tageskennzahlen samt Tanktipp.
-     *
-     * @param ctx             Kontext
-     * @param model           trainiertes Modell
-     * @param biasByStation   Selbstkorrektur je Tankstelle
-     * @param horizonSteps    größter Horizont in Rasterschritten
-     * @param stepSeconds     Rasterabstand in Sekunden
-     * @param minHistorySteps Mindesthistorie in Rasterschritten
-     * @return Vorhersage je Tankstelle
-     */
-    private List<StationForecast> infer(final ForecastContext ctx, final GbdtForecastModel model,
-                                        final Map<String, double[]> biasByStation, final int horizonSteps,
-                                        final long stepSeconds, final int minHistorySteps) {
+    public Result infer(final String fuelCode, final ForecastContext ctx, final TrainedModel trained,
+                        final Map<String, double[]> biasByStation, final Instant now) {
+        final Layout layout = Layout.of(ctx, props);
         final List<StationForecast> stations = new ArrayList<>();
         for (final String stationId : ctx.stationIds()) {
             final HourlyGrid grid = ctx.grid(stationId);
-            if (grid.size() < minHistorySteps) {
+            if (grid.size() < layout.minHistorySteps()) {
                 continue;
             }
             final int origin = grid.lastIndex();
-            final long originEpoch = grid.timeAt(origin);
-            final double[][] features = new double[horizonSteps][];
-            for (int h = 1; h <= horizonSteps; h++) {
+            final double current = grid.priceAt(origin);
+            final double[][] features = new double[layout.horizonSteps()][];
+            for (int h = 1; h <= layout.horizonSteps(); h++) {
                 features[h - 1] = ForecastFeatures.build(ctx, stationId, origin, h);
             }
-            final GbdtForecastModel.Prediction prediction = model.predict(features);
-            final double[] bias = biasByStation.get(stationId);
-            final List<CurvePoint> curve = buildCurve(prediction, bias, originEpoch, stepSeconds, horizonSteps);
-            final List<DailyPoint> dailies = buildDailies(curve, grid.lastPrice(), originEpoch);
-            stations.add(new StationForecast(stationId, curve, dailies));
+            final GbdtForecastModel.Prediction prediction = trained.model().predict(features);
+            final List<CurvePoint> curve = buildCurve(prediction, biasByStation.get(stationId), current,
+                    grid.timeAt(origin), ctx.stepSeconds(), layout.horizonSteps());
+            stations.add(new StationForecast(stationId, curve,
+                    buildDailies(curve, current, grid.timeAt(origin))));
         }
-        return stations;
+        final long originEpoch = floorToStep(now.getEpochSecond(), ctx.stepSeconds());
+        return new Result(fuelCode, now, Instant.ofEpochSecond(originEpoch), props.getHorizonHours(),
+                props.getResolutionMinutes(), trained.modelVersion(), trained.trainRows(),
+                trained.trainMae(), stations);
     }
 
     /**
-     * Baut die Kurvenpunkte einer Tankstelle samt gegengerechneter Selbstkorrektur.
+     * Trainiert ein Messmodell ohne den Validierungsausschnitt und bestimmt daran den mittleren
+     * absoluten Fehler, aufgeschlüsselt nach Horizont-Abschnitt.
      *
-     * @param prediction   Modellvorhersage über alle Horizonte
+     * @param fuelCode   Datenbank-Code des Kraftstoffs
+     * @param ctx        Kontext
+     * @param layout     Rastermaße des Laufs
+     * @param cutoff     Beginn des Validierungsausschnitts
+     * @param trainTotal Anzahl der Trainingskandidaten
+     * @param validTotal Anzahl der Validierungskandidaten
+     * @return mittlerer absoluter Fehler in Cent/Liter oder {@code null}
+     */
+    private Double measure(final String fuelCode, final ForecastContext ctx, final Layout layout,
+                           final long cutoff, final long trainTotal, final long validTotal) {
+        final TrainingMatrix matrix = collect(ctx, layout, cutoff, Part.TRAIN, trainTotal,
+                props.getMaxTrainRows());
+        if (matrix.isEmpty()) {
+            return null;
+        }
+        final GbdtForecastModel probe = GbdtForecastModel.train(matrix, props, false);
+        final Validation validation = collectValidation(ctx, layout, cutoff, validTotal);
+        if (validation.rows == 0) {
+            return null;
+        }
+        final double[] predicted = probe.predict(validation.features).point();
+        final double[] bucketSum = new double[BUCKET_LABELS.length];
+        final int[] bucketCount = new int[BUCKET_LABELS.length];
+        double sum = 0.0;
+        for (int row = 0; row < validation.rows; row++) {
+            final double error = Math.abs(predicted[row] - validation.targets[row]) * CENT_FACTOR;
+            sum += error;
+            final int bucket = bucketFor(validation.horizonMinutes[row]);
+            bucketSum[bucket] += error;
+            bucketCount[bucket]++;
+        }
+        logBuckets(fuelCode, validation.rows, bucketSum, bucketCount);
+        return sum / validation.rows;
+    }
+
+    /**
+     * Protokolliert den Validierungsfehler je Horizont-Abschnitt.
+     *
+     * @param fuelCode    Datenbank-Code des Kraftstoffs
+     * @param rows        Anzahl der Validierungszeilen
+     * @param bucketSum   Fehlersumme je Abschnitt
+     * @param bucketCount Zeilenzahl je Abschnitt
+     */
+    private void logBuckets(final String fuelCode, final int rows, final double[] bucketSum,
+                            final int[] bucketCount) {
+        final StringBuilder text = new StringBuilder();
+        for (int bucket = 0; bucket < BUCKET_LABELS.length; bucket++) {
+            if (bucketCount[bucket] == 0) {
+                continue;
+            }
+            if (!text.isEmpty()) {
+                text.append(", ");
+            }
+            text.append(String.format("%s %.3f ct", BUCKET_LABELS[bucket],
+                    bucketSum[bucket] / bucketCount[bucket]));
+        }
+        LOG.info("Vorhersage {}: Validierung auf {} Zeilen – MAE je Horizont: {}", fuelCode, rows, text);
+    }
+
+    /**
+     * Zählt die Kandidaten je Stichprobenteil.
+     *
+     * @param ctx    Kontext
+     * @param layout Rastermaße des Laufs
+     * @param cutoff Beginn des Validierungsausschnitts
+     * @return Array {Trainingskandidaten, Validierungskandidaten, Kandidaten insgesamt}
+     */
+    private long[] count(final ForecastContext ctx, final Layout layout, final long cutoff) {
+        final long[] totals = new long[3];
+        for (final String stationId : ctx.stationIds()) {
+            final HourlyGrid grid = ctx.grid(stationId);
+            if (grid.size() < layout.minHistorySteps()) {
+                continue;
+            }
+            final int last = grid.lastIndex();
+            for (int origin = layout.warmupSteps(); origin <= last - 1; origin += layout.originStep()) {
+                final long originEpoch = grid.timeAt(origin);
+                for (int h = layout.horizonStep(); h <= layout.horizonSteps(); h += layout.horizonStep()) {
+                    if (origin + h > last) {
+                        break;
+                    }
+                    totals[2]++;
+                    if (originEpoch >= cutoff) {
+                        totals[1]++;
+                    } else if (grid.timeAt(origin + h) < cutoff) {
+                        totals[0]++;
+                    }
+                }
+            }
+        }
+        return totals;
+    }
+
+    /**
+     * Sammelt einen Stichprobenteil in eine spaltenweise Trainingsmatrix und dünnt ihn dabei zufällig
+     * auf die zulässige Zeilenzahl aus.
+     *
+     * @param ctx    Kontext
+     * @param layout Rastermaße des Laufs
+     * @param cutoff Beginn des Validierungsausschnitts
+     * @param part   zu sammelnder Teil
+     * @param total  Anzahl der Kandidaten dieses Teils
+     * @param cap    Höchstzahl zu übernehmender Zeilen
+     * @return gefüllte Trainingsmatrix
+     */
+    private TrainingMatrix collect(final ForecastContext ctx, final Layout layout, final long cutoff,
+                                   final Part part, final long total, final long cap) {
+        final TrainingMatrix matrix = new TrainingMatrix(ForecastFeatures.count(), capacityFor(total, cap));
+        final double acceptance = total <= cap ? 1.0 : (double) cap / total;
+        final Random random = new Random(props.getSamplingSeed() + part.ordinal());
+        final double[] buffer = new double[ForecastFeatures.count()];
+        for (final String stationId : ctx.stationIds()) {
+            final HourlyGrid grid = ctx.grid(stationId);
+            if (grid.size() < layout.minHistorySteps()) {
+                continue;
+            }
+            final int last = grid.lastIndex();
+            for (int origin = layout.warmupSteps(); origin <= last - 1; origin += layout.originStep()) {
+                final long originEpoch = grid.timeAt(origin);
+                final double current = grid.priceAt(origin);
+                for (int h = layout.horizonStep(); h <= layout.horizonSteps(); h += layout.horizonStep()) {
+                    if (origin + h > last) {
+                        break;
+                    }
+                    if (!part.accepts(originEpoch, grid.timeAt(origin + h), cutoff)) {
+                        continue;
+                    }
+                    if (acceptance < 1.0 && random.nextDouble() >= acceptance) {
+                        continue;
+                    }
+                    ForecastFeatures.build(ctx, stationId, origin, h, buffer);
+                    if (!matrix.add(buffer, grid.priceAt(origin + h) - current)) {
+                        return matrix;
+                    }
+                }
+            }
+        }
+        return matrix;
+    }
+
+    /**
+     * Sammelt den Validierungsausschnitt zeilenweise samt Horizont, um den Fehler je Abschnitt
+     * ausweisen zu können.
+     *
+     * @param ctx    Kontext
+     * @param layout Rastermaße des Laufs
+     * @param cutoff Beginn des Validierungsausschnitts
+     * @param total  Anzahl der Validierungskandidaten
+     * @return gefüllter Validierungsausschnitt
+     */
+    private Validation collectValidation(final ForecastContext ctx, final Layout layout, final long cutoff,
+                                         final long total) {
+        final int capacity = capacityFor(total, VALIDATION_CAP);
+        final Validation validation = new Validation(capacity);
+        final double acceptance = total <= VALIDATION_CAP ? 1.0 : (double) VALIDATION_CAP / total;
+        final Random random = new Random(props.getSamplingSeed() + Part.VALIDATION.ordinal());
+        for (final String stationId : ctx.stationIds()) {
+            final HourlyGrid grid = ctx.grid(stationId);
+            if (grid.size() < layout.minHistorySteps()) {
+                continue;
+            }
+            final int last = grid.lastIndex();
+            for (int origin = layout.warmupSteps(); origin <= last - 1; origin += layout.originStep()) {
+                final long originEpoch = grid.timeAt(origin);
+                if (originEpoch < cutoff) {
+                    continue;
+                }
+                final double current = grid.priceAt(origin);
+                for (int h = layout.horizonStep(); h <= layout.horizonSteps(); h += layout.horizonStep()) {
+                    if (origin + h > last) {
+                        break;
+                    }
+                    if (acceptance < 1.0 && random.nextDouble() >= acceptance) {
+                        continue;
+                    }
+                    if (validation.rows == capacity) {
+                        return validation;
+                    }
+                    validation.features[validation.rows] = ForecastFeatures.build(ctx, stationId, origin, h);
+                    validation.targets[validation.rows] = grid.priceAt(origin + h) - current;
+                    validation.horizonMinutes[validation.rows] =
+                            (int) ((long) h * ctx.stepSeconds() / 60L);
+                    validation.rows++;
+                }
+            }
+        }
+        return validation;
+    }
+
+    /**
+     * Baut die Kurvenpunkte einer Tankstelle: Die vorhergesagte Änderung wird auf den Ausgangspreis
+     * addiert, die gemessene Selbstkorrektur gegengerechnet und das Ergebnis begrenzt.
+     *
+     * @param prediction   Modellvorhersage (Preisänderungen) über alle Horizonte
      * @param bias         Selbstkorrektur (Cent je Horizont-Abschnitt) oder {@code null}
+     * @param current      Ausgangspreis
      * @param originEpoch  Ausgangszeitpunkt (Sekunden seit der Epoche)
      * @param stepSeconds  Rasterabstand in Sekunden
      * @param horizonSteps größter Horizont in Rasterschritten
      * @return Kurvenpunkte
      */
     private List<CurvePoint> buildCurve(final GbdtForecastModel.Prediction prediction, final double[] bias,
-                                        final long originEpoch, final long stepSeconds, final int horizonSteps) {
+                                        final double current, final long originEpoch, final long stepSeconds,
+                                        final int horizonSteps) {
         final List<CurvePoint> curve = new ArrayList<>(horizonSteps);
         for (int h = 1; h <= horizonSteps; h++) {
             final int idx = h - 1;
             final int horizonMinutes = (int) ((long) h * stepSeconds / 60L);
-            final double correction = bias == null ? 0.0 : bias[bucketFor(horizonMinutes)] / 100.0;
-            final double point = clamp(prediction.point()[idx] - correction);
-            final Double low = prediction.low() == null ? null : clamp(prediction.low()[idx] - correction);
-            final Double high = prediction.high() == null ? null : clamp(prediction.high()[idx] - correction);
-            final Instant targetAt = Instant.ofEpochSecond(originEpoch + (long) h * stepSeconds);
-            curve.add(new CurvePoint(targetAt, horizonMinutes, point, low, high));
+            final double correction = bias == null ? 0.0 : bias[bucketFor(horizonMinutes)] / CENT_FACTOR;
+            final double point = clamp(current + prediction.point()[idx] - correction);
+            final Double low = prediction.low() == null
+                    ? null : clamp(current + prediction.low()[idx] - correction);
+            final Double high = prediction.high() == null
+                    ? null : clamp(current + prediction.high()[idx] - correction);
+            curve.add(new CurvePoint(Instant.ofEpochSecond(originEpoch + (long) h * stepSeconds),
+                    horizonMinutes, point, low, high));
         }
         return curve;
     }
@@ -295,10 +392,11 @@ public class ForecastModelTrainer {
      * @param originEpoch Ausgangszeitpunkt (Sekunden seit der Epoche)
      * @return Tageskennzahlen
      */
-    private List<DailyPoint> buildDailies(final List<CurvePoint> curve, final double current, final long originEpoch) {
+    private List<DailyPoint> buildDailies(final List<CurvePoint> curve, final double current,
+                                          final long originEpoch) {
         final LocalDate today = Instant.ofEpochSecond(originEpoch).atZone(BERLIN).toLocalDate();
         final List<LocalDate> order = new ArrayList<>();
-        final Map<LocalDate, List<CurvePoint>> byDate = new java.util.LinkedHashMap<>();
+        final Map<LocalDate, List<CurvePoint>> byDate = new LinkedHashMap<>();
         for (final CurvePoint point : curve) {
             final LocalDate date = point.targetAt().atZone(BERLIN).toLocalDate();
             byDate.computeIfAbsent(date, key -> {
@@ -325,7 +423,8 @@ public class ForecastModelTrainer {
      * @return Tageskennzahl
      */
     private DailyPoint summarizeDate(final LocalDate date, final List<CurvePoint> points, final double current,
-                                     final LocalDate today, final List<CurvePoint> fullCurve, final long originEpoch) {
+                                     final LocalDate today, final List<CurvePoint> fullCurve,
+                                     final long originEpoch) {
         CurvePoint low = points.get(0);
         double sum = 0.0;
         for (final CurvePoint point : points) {
@@ -348,7 +447,7 @@ public class ForecastModelTrainer {
                     reachableLow = point.predicted();
                 }
             }
-            final double saving = (current - reachableLow) * 100.0;
+            final double saving = (current - reachableLow) * CENT_FACTOR;
             final boolean wait = saving >= props.getRecommendationThresholdCt();
             recommendation = wait ? RefuelRecommendation.WARTEN : RefuelRecommendation.TANKEN;
             reason = wait ? "TIEF_IM_WARTEFENSTER" : "JETZT_GUENSTIG";
@@ -357,6 +456,25 @@ public class ForecastModelTrainer {
         }
         return new DailyPoint(date, low.predicted(), low.targetAt(), mean, low.low(), low.high(),
                 recommendation, reason, savingCt, currentAmount);
+    }
+
+    /**
+     * Bestimmt die Feldgröße einer Stichprobe samt Sicherheitszuschlag.
+     *
+     * <p>Bei der zufälligen Auswahl schwankt die tatsächlich getroffene Zeilenzahl um den Zielwert.
+     * Der Zuschlag von acht Standardabweichungen sorgt dafür, dass das Feld praktisch nie vorzeitig
+     * volläuft und damit spätere Tankstellen benachteiligt.</p>
+     *
+     * @param total Anzahl der Kandidaten
+     * @param cap   Zielzahl der Zeilen
+     * @return Feldgröße
+     */
+    private static int capacityFor(final long total, final long cap) {
+        if (total <= cap) {
+            return (int) total;
+        }
+        final long margin = Math.max(1_000L, (long) (8.0 * Math.sqrt(cap)));
+        return (int) Math.min(total, cap + margin);
     }
 
     /**
@@ -400,39 +518,93 @@ public class ForecastModelTrainer {
     }
 
     /**
-     * Veränderliche Sammelstruktur der Trainings- und Validierungsmatrizen.
+     * Teil der Stichprobe, der gesammelt werden soll.
      */
-    private static final class Samples {
+    private enum Part {
 
-        /** Merkmalsmatrix der Trainingsbeispiele. */
-        private final double[][] trainX;
+        /** Training ohne den Validierungsausschnitt und ohne die Beispiele, die dorthin reichen. */
+        TRAIN,
 
-        /** Zielwerte der Trainingsbeispiele. */
-        private final double[] trainY;
+        /** Der Validierungsausschnitt selbst. */
+        VALIDATION,
 
-        /** Merkmalsmatrix der Validierungsbeispiele. */
-        private final double[][] validX;
-
-        /** Zielwerte der Validierungsbeispiele. */
-        private final double[] validY;
-
-        /** Anzahl der gefüllten Trainingsbeispiele. */
-        private int trainCount;
-
-        /** Anzahl der gefüllten Validierungsbeispiele. */
-        private int validCount;
+        /** Der gesamte Zeitraum, für das ausgelieferte Modell. */
+        FULL;
 
         /**
-         * Legt die Sammelstruktur mit den vorab bestimmten Kapazitäten an.
+         * Prüft, ob ein Kandidat zu diesem Teil gehört.
          *
-         * @param trainCapacity Feldgröße der Trainingsbeispiele
-         * @param validCapacity Feldgröße der Validierungsbeispiele
+         * @param originEpoch Ausgangszeitpunkt
+         * @param targetEpoch Zielzeitpunkt
+         * @param cutoff      Beginn des Validierungsausschnitts
+         * @return {@code true}, wenn der Kandidat zu diesem Teil zählt
          */
-        private Samples(final int trainCapacity, final int validCapacity) {
-            this.trainX = new double[trainCapacity][];
-            this.trainY = new double[trainCapacity];
-            this.validX = new double[validCapacity][];
-            this.validY = new double[validCapacity];
+        private boolean accepts(final long originEpoch, final long targetEpoch, final long cutoff) {
+            return switch (this) {
+                case TRAIN -> originEpoch < cutoff && targetEpoch < cutoff;
+                case VALIDATION -> originEpoch >= cutoff;
+                case FULL -> true;
+            };
+        }
+
+    }
+
+    /**
+     * Aus der Konfiguration abgeleitete Rastermaße eines Laufs.
+     *
+     * @param horizonSteps    größter Horizont in Rasterschritten
+     * @param originStep      Abstand der Ausgangszeitpunkte in Rasterschritten
+     * @param horizonStep     Abstand der Horizonte in Rasterschritten
+     * @param warmupSteps     Vorlauf in Rasterschritten, bevor ein Punkt als Ausgang dient
+     * @param minHistorySteps Mindesthistorie in Rasterschritten
+     */
+    private record Layout(int horizonSteps, int originStep, int horizonStep, int warmupSteps,
+                          int minHistorySteps) {
+
+        /**
+         * Leitet die Rastermaße aus Kontext und Konfiguration ab.
+         *
+         * @param ctx   Kontext
+         * @param props Konfiguration
+         * @return Rastermaße
+         */
+        private static Layout of(final ForecastContext ctx, final ForecastProperties props) {
+            final int sph = ctx.stepsPerHour();
+            return new Layout(props.getHorizonHours() * sph,
+                    Math.max(1, props.getTrainOriginStepHours() * sph),
+                    Math.max(1, props.getTrainHorizonStepHours() * sph),
+                    WARMUP_HOURS * sph,
+                    props.getMinHistoryDays() * 24 * sph);
+        }
+
+    }
+
+    /**
+     * Zeilenweise gesammelter Validierungsausschnitt.
+     */
+    private static final class Validation {
+
+        /** Merkmalsmatrix der Validierungsbeispiele. */
+        private final double[][] features;
+
+        /** Zielwerte (Preisänderungen) der Validierungsbeispiele. */
+        private final double[] targets;
+
+        /** Horizont je Validierungsbeispiel in Minuten. */
+        private final int[] horizonMinutes;
+
+        /** Anzahl der gefüllten Zeilen. */
+        private int rows;
+
+        /**
+         * Legt den Ausschnitt mit fester Kapazität an.
+         *
+         * @param capacity Höchstzahl aufnehmbarer Zeilen
+         */
+        private Validation(final int capacity) {
+            this.features = new double[capacity][];
+            this.targets = new double[capacity];
+            this.horizonMinutes = new int[capacity];
         }
 
     }

@@ -30,13 +30,28 @@ public class ForecastProperties {
     /** Schaltet die gesamte Vorhersage an oder aus (Training und Auslieferung). */
     private boolean enabled = true;
 
-    /** Cron-Ausdruck des täglichen Neutrainings (Standard 0:00 Uhr). */
+    /** Cron-Ausdruck des täglichen Vorhersagelaufs (Standard 0:00 Uhr). */
     @NotBlank
-    private String trainCron = "0 0 0 * * *";
+    private String cycleCron = "0 0 0 * * *";
 
-    /** Zeitzone, in der der Trainings-Cron ausgewertet wird. */
+    /** Zeitzone, in der der Cron des Vorhersagelaufs ausgewertet wird. */
     @NotBlank
-    private String trainZone = "Europe/Berlin";
+    private String cycleZone = "Europe/Berlin";
+
+    /**
+     * Abstand zweier Neutrainings in Tagen.
+     *
+     * <p>Der Vorhersagelauf findet täglich statt, das Neutraining des Modells nur, wenn das
+     * gespeicherte Modell älter als dieser Abstand ist. Bewusst nicht über den Cron-Ausdruck gelöst:
+     * {@code &#42;/3} im Tagesfeld feuert an den Monatstagen 1, 4, … 28, 31 und liefert am Monatswechsel
+     * einen Abstand von einem oder zwei statt drei Tagen.</p>
+     */
+    @Positive
+    private int trainIntervalDays = 3;
+
+    /** Verzeichnis, in dem die trainierten Modelle je Kraftstoffart abgelegt werden. */
+    @NotBlank
+    private String modelStorePath = "data/forecast-models";
 
     /** Holt die Vorhersage nach einem Neustart einmalig nach, falls für heute noch keine vorliegt. */
     private boolean catchUpOnStartup = true;
@@ -58,9 +73,15 @@ public class ForecastProperties {
     @Positive
     private int minHistoryDays = 14;
 
-    /** Aufbewahrung der vollständigen Stundenkurve in Tagen. */
+    /**
+     * Aufbewahrung der vollständigen Stundenkurve in Tagen.
+     *
+     * <p>Muss größer als {@code feedback-lookback-days} sein: Die Selbstkorrektur vergleicht
+     * gespeicherte Vorhersagepunkte mit den tatsächlichen Preisen und verlöre bei gleichem Wert genau
+     * die ältesten Stichproben ihres Messfensters.</p>
+     */
     @Positive
-    private int retentionCurveDays = 30;
+    private int retentionCurveDays = 45;
 
     /** Aufbewahrung der kompakten Tageszusammenfassung samt Treffer-Abgleich in Tagen. */
     @Positive
@@ -108,46 +129,84 @@ public class ForecastProperties {
     private int recommendationMaxWaitMinutes = 480;
 
     /**
-     * Obergrenze der Trainingszeilen je Kraftstoffart; darüber wird gleichmäßig ausgedünnt. Bewusst
-     * Raspberry-Pi-sicher gewählt: Die Merkmalsmatrix bleibt damit deutlich unter dem voreingestellten
-     * Heap-Limit ({@code -Xmx512m}) des systemd-Dienstes. Bei mehr Arbeitsspeicher kann der Wert erhöht
-     * werden.
+     * Länge des Validierungsausschnitts in Tagen (jüngste Ausgangszeitpunkte).
+     *
+     * <p>Beispiele, deren Zielzeitpunkt in diesen Ausschnitt fällt, werden zusätzlich aus dem
+     * Training entfernt. Ohne diese Sperrzone würde ein Trainingsbeispiel kurz vor der Grenze bis zu
+     * {@code horizon-hours} in den Validierungszeitraum hineinreichen und den gemessenen Fehler
+     * beschönigen.</p>
      */
     @Positive
-    private long maxTrainRows = 400_000;
+    private int validationDays = 3;
+
+    /**
+     * Trainiert nach der Fehlermessung ein zweites Mal über den gesamten Zeitraum.
+     *
+     * <p>Der Validierungsausschnitt samt Sperrzone hält die jüngsten Tage aus dem Training heraus –
+     * gerade die sind aber am aussagekräftigsten. Ist diese Einstellung aktiv, dient der erste Lauf
+     * nur der Fehlermessung, und das ausgelieferte Modell wird anschließend auf allen Daten neu
+     * gebildet. Der berichtete Fehler bleibt dabei die ehrliche Schätzung aus dem Validierungslauf.</p>
+     */
+    private boolean refitOnFullData = true;
+
+    /** Startwert des Zufallsgenerators der Trainingsstichprobe (macht Läufe reproduzierbar). */
+    private long samplingSeed = 20_260_726L;
+
+    /**
+     * Obergrenze der Trainingszeilen je Kraftstoffart; darüber wird zufällig ausgedünnt.
+     *
+     * <p>Grobe Abschätzung des Bedarfs: {@code Zeilen × (Merkmale + 1) × 8 Byte} für den Datensatz,
+     * plus etwa {@code Zeilen × Merkmale × 4 Byte} für die von Smile intern gehaltenen Sortierindizes.
+     * Bei 1,5 Mio Zeilen und 27 Merkmalen sind das rund 340 MB plus 160 MB, was mit dem für den
+     * systemd-Dienst vorgesehenen {@code -Xmx1g} zusammenpasst. Bei knapperem Speicher entsprechend
+     * senken.</p>
+     */
+    @Positive
+    private long maxTrainRows = 1_500_000;
 
     /** Anzahl der Rechen-Threads des Modells (Smile). */
     @Min(1)
-    private int modelThreads = 2;
+    private int modelThreads = 3;
 
-    /** Abstand der Ausgangszeitpunkte der Trainingsstichprobe in Stunden. */
+    /**
+     * Abstand der Ausgangszeitpunkte der Trainingsstichprobe in Stunden.
+     *
+     * <p>Standard 1: Jeder Rasterpunkt kommt als Ausgangszeitpunkt in Frage. Größere Werte lassen
+     * Tagesstunden vollständig aus dem Training fallen – bei 6 kämen nur vier verschiedene
+     * Tagesstunden vor –, während die Vorhersage später für jede Stunde abgefragt wird.</p>
+     */
     @Positive
-    private int trainOriginStepHours = 6;
+    private int trainOriginStepHours = 1;
 
-    /** Abstand der abgedeckten Horizonte der Trainingsstichprobe in Stunden. */
+    /**
+     * Abstand der abgedeckten Horizonte der Trainingsstichprobe in Stunden.
+     *
+     * <p>Standard 1: Jeder ausgelieferte Horizont wird auch trainiert. Größere Werte lassen gerade
+     * die kurzen Horizonte ungetraint, die für den Tanktipp am wichtigsten sind.</p>
+     */
     @Positive
-    private int trainHorizonStepHours = 3;
+    private int trainHorizonStepHours = 1;
 
     /** Anzahl der Bäume des Gradient-Boosting-Modells. */
     @Positive
-    private int gbdtTrees = 300;
+    private int gbdtTrees = 600;
 
     /** Maximale Tiefe eines Baumes. */
     @Positive
-    private int gbdtMaxDepth = 6;
+    private int gbdtMaxDepth = 8;
 
     /** Maximale Zahl der Blattknoten eines Baumes. */
     @Positive
-    private int gbdtMaxNodes = 32;
+    private int gbdtMaxNodes = 64;
 
     /** Mindestanzahl der Beobachtungen je Blattknoten. */
     @Positive
-    private int gbdtNodeSize = 20;
+    private int gbdtNodeSize = 40;
 
     /** Lernrate (Schrumpfung) des Boostings in (0, 1]. */
     @DecimalMin("0.0")
     @DecimalMax("1.0")
-    private double gbdtShrinkage = 0.05;
+    private double gbdtShrinkage = 0.03;
 
     /** Stichprobenanteil je Baum (stochastisches Boosting). */
     @DecimalMin("0.0")
