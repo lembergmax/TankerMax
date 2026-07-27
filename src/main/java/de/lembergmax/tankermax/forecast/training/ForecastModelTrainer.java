@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,9 +75,6 @@ public class ForecastModelTrainer {
      * fälschlich eine unveränderte Woche vortäuschen.
      */
     private static final int WARMUP_HOURS = 168;
-
-    /** Obergrenze der Validierungszeilen. */
-    private static final int VALIDATION_CAP = 200_000;
 
     /** Beschriftungen der Horizont-Abschnitte für die Fehlerausgabe. */
     private static final String[] BUCKET_LABELS = {"<=2h", "<=6h", "<=12h", ">12h"};
@@ -184,7 +182,7 @@ public class ForecastModelTrainer {
         if (validation.rows == 0) {
             return null;
         }
-        final double[] predicted = probe.predict(validation.features).point();
+        final double[] predicted = probe.predict(validation.features()).point();
         final double[] bucketSum = new double[BUCKET_LABELS.length];
         final int[] bucketCount = new int[BUCKET_LABELS.length];
         double sum = 0.0;
@@ -316,9 +314,10 @@ public class ForecastModelTrainer {
      */
     private Validation collectValidation(final ForecastContext ctx, final Layout layout, final long cutoff,
                                          final long total) {
-        final int capacity = capacityFor(total, VALIDATION_CAP);
+        final int cap = props.getMaxValidationRows();
+        final int capacity = capacityFor(total, cap);
         final Validation validation = new Validation(capacity);
-        final double acceptance = total <= VALIDATION_CAP ? 1.0 : (double) VALIDATION_CAP / total;
+        final double acceptance = total <= cap ? 1.0 : (double) cap / total;
         final Random random = new Random(props.getSamplingSeed() + Part.VALIDATION.ordinal());
         for (final String stationId : ctx.stationIds()) {
             final HourlyGrid grid = ctx.grid(stationId);
@@ -584,7 +583,14 @@ public class ForecastModelTrainer {
      */
     private static final class Validation {
 
-        /** Merkmalsmatrix der Validierungsbeispiele. */
+        /**
+         * Merkmalsmatrix der Validierungsbeispiele.
+         *
+         * <p>Das Feld wird mit der vorab bestimmten Kapazität angelegt, durch die zufällige Auswahl
+         * aber in aller Regel nicht vollständig gefüllt. Die überzähligen Zeilen bleiben {@code null}
+         * und dürfen niemals in die Vorhersage gelangen – deshalb ist der Zugriff von außen nur über
+         * {@link #features()} möglich, das auf die tatsächlich gefüllten Zeilen kürzt.</p>
+         */
         private final double[][] features;
 
         /** Zielwerte (Preisänderungen) der Validierungsbeispiele. */
@@ -605,6 +611,15 @@ public class ForecastModelTrainer {
             this.features = new double[capacity][];
             this.targets = new double[capacity];
             this.horizonMinutes = new int[capacity];
+        }
+
+        /**
+         * Liefert die Merkmalsmatrix, gekürzt auf die tatsächlich gefüllten Zeilen.
+         *
+         * @return Merkmalsmatrix mit genau {@code rows} Zeilen
+         */
+        private double[][] features() {
+            return features.length == rows ? features : Arrays.copyOf(features, rows);
         }
 
     }

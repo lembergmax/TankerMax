@@ -87,8 +87,14 @@ public class ForecastProperties {
     @Positive
     private int retentionSummaryDays = 365;
 
-    /** Schätzt zusätzlich ein unteres (q10) und oberes (q90) Quantil je Vorhersagepunkt. */
-    private boolean quantilesEnabled = true;
+    /**
+     * Schätzt zusätzlich ein unteres (q10) und oberes (q90) Quantil je Vorhersagepunkt.
+     *
+     * <p>Jedes Quantil ist ein vollständiges eigenes Modell und verdreifacht damit die Trainingszeit.
+     * Auf dem Zielsystem (Raspberry Pi 5) ist das nicht tragbar, daher standardmäßig aus; das
+     * Dashboard zeichnet das Band dann einfach nicht. Punktvorhersage und Tanktipp sind unberührt.</p>
+     */
+    private boolean quantilesEnabled = false;
 
     /** Unteres Quantil des Unsicherheitsbandes (zwischen 0 und 1). */
     @DecimalMin("0.0")
@@ -153,16 +159,26 @@ public class ForecastProperties {
     private long samplingSeed = 20_260_726L;
 
     /**
+     * Obergrenze der Validierungszeilen; darüber wird wie beim Training zufällig ausgedünnt.
+     *
+     * <p>Der Validierungsausschnitt wird zeilenweise gehalten, um den Fehler je Horizont-Abschnitt
+     * ausweisen zu können. Er ist deutlich kleiner als die Trainingsmatrix und fällt beim
+     * Speicherbedarf kaum ins Gewicht.</p>
+     */
+    @Positive
+    private int maxValidationRows = 200_000;
+
+    /**
      * Obergrenze der Trainingszeilen je Kraftstoffart; darüber wird zufällig ausgedünnt.
      *
      * <p>Grobe Abschätzung des Bedarfs: {@code Zeilen × (Merkmale + 1) × 8 Byte} für den Datensatz,
      * plus etwa {@code Zeilen × Merkmale × 4 Byte} für die von Smile intern gehaltenen Sortierindizes.
-     * Bei 1,5 Mio Zeilen und 27 Merkmalen sind das rund 340 MB plus 160 MB, was mit dem für den
+     * Bei 1,2 Mio Zeilen und 27 Merkmalen sind das rund 270 MB plus 130 MB, was mit dem für den
      * systemd-Dienst vorgesehenen {@code -Xmx1g} zusammenpasst. Bei knapperem Speicher entsprechend
      * senken.</p>
      */
     @Positive
-    private long maxTrainRows = 1_500_000;
+    private long maxTrainRows = 1_200_000;
 
     /** Anzahl der Rechen-Threads des Modells (Smile). */
     @Min(1)
@@ -187,9 +203,16 @@ public class ForecastProperties {
     @Positive
     private int trainHorizonStepHours = 1;
 
-    /** Anzahl der Bäume des Gradient-Boosting-Modells. */
+    /**
+     * Anzahl der Bäume des Gradient-Boosting-Modells.
+     *
+     * <p>Die Rechenzeit steigt praktisch linear mit {@code Zeilen × Bäume}; auf dem Zielsystem wurden
+     * rund 105 Minuten je Modell bei 1,5 Mio Zeilen und 600 Bäumen gemessen. Die Lernkapazität hängt
+     * dagegen am Produkt aus Bäumen und {@link #gbdtShrinkage}, weshalb beide Werte gegenläufig
+     * angepasst werden sollten.</p>
+     */
     @Positive
-    private int gbdtTrees = 600;
+    private int gbdtTrees = 350;
 
     /** Maximale Tiefe eines Baumes. */
     @Positive
@@ -203,10 +226,10 @@ public class ForecastProperties {
     @Positive
     private int gbdtNodeSize = 40;
 
-    /** Lernrate (Schrumpfung) des Boostings in (0, 1]. */
+    /** Lernrate (Schrumpfung) des Boostings in (0, 1]; gegenläufig zu {@link #gbdtTrees} zu wählen. */
     @DecimalMin("0.0")
     @DecimalMax("1.0")
-    private double gbdtShrinkage = 0.03;
+    private double gbdtShrinkage = 0.05;
 
     /** Stichprobenanteil je Baum (stochastisches Boosting). */
     @DecimalMin("0.0")

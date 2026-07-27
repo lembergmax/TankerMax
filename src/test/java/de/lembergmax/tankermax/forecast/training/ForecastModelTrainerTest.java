@@ -99,6 +99,27 @@ class ForecastModelTrainerTest {
     }
 
     /**
+     * Auch wenn der Validierungsausschnitt ausgedünnt werden muss, gelingt die Fehlermessung.
+     *
+     * <p>Übersteigt die Zahl der Kandidaten die Obergrenze, greift die zufällige Auswahl: Das Feld
+     * wird mit einem Sicherheitszuschlag angelegt, aber nur bis etwa zur Obergrenze gefüllt. Die
+     * überzähligen Zeilen bleiben leer und dürfen nicht in die Vorhersage gelangen. Ohne das Kürzen
+     * scheiterte der gesamte Trainingslauf hier – und zwar erst nach der vollständigen Modellbildung,
+     * also nach Stunden Rechenzeit.</p>
+     */
+    @Test
+    void misstFehlerAuchBeiAusgeduenntemValidierungsausschnitt() {
+        final ForecastProperties props = props();
+        props.setMaxValidationRows(500);
+        final ForecastContext ctx = ForecastContext.build(buildStations(), NOW.getEpochSecond(), HOUR);
+
+        final TrainedModel schmal = new ForecastModelTrainer(props).train("E5", ctx, NOW);
+
+        assertThat(schmal).isNotNull();
+        assertThat(schmal.trainMae()).isNotNull().isLessThan(2.0);
+    }
+
+    /**
      * Die Kurve gibt den Tagesrhythmus wieder statt ihn zu einer flachen Linie zu glätten.
      *
      * <p>Der künstliche Zyklus hat eine Spanne von zehn Cent. Ein Modell, das nur einen Teil der
