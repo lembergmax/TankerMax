@@ -12,19 +12,30 @@
     <artifactId>TankerMax</artifactId>
     <version>0.0.1</version>
     <name>TankerMax</name>
-    <description>TankerMax</description>
-    <url/>
+    <description>Sammelt Spritpreise der Tankerkoenig-API in dritter Normalform und zeigt Verlauf und
+        KI-Preisvorhersage in einem schlanken Dashboard.</description>
+    <url>https://github.com/lembergmax/TankerMax</url>
+    <!-- Die Bloecke licenses/developers/scm sind zugleich Ueberschreibungen, die die Vererbung der
+         entsprechenden Angaben aus der Spring-Boot-Eltern-POM unterbinden (siehe HELP.md). -->
     <licenses>
-        <license/>
+        <license>
+            <name>MIT License</name>
+            <url>https://github.com/lembergmax/TankerMax/blob/main/LICENSE</url>
+            <distribution>repo</distribution>
+        </license>
     </licenses>
     <developers>
-        <developer/>
+        <developer>
+            <id>lembergmax</id>
+            <name>Max Lemberg</name>
+            <url>https://github.com/lembergmax</url>
+        </developer>
     </developers>
     <scm>
-        <connection/>
-        <developerConnection/>
-        <tag/>
-        <url/>
+        <connection>scm:git:https://github.com/lembergmax/TankerMax.git</connection>
+        <developerConnection>scm:git:git@github.com:lembergmax/TankerMax.git</developerConnection>
+        <tag>HEAD</tag>
+        <url>https://github.com/lembergmax/TankerMax</url>
     </scm>
     <properties>
         <java.version>21</java.version>

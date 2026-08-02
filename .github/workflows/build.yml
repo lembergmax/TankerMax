@@ -1,0 +1,46 @@
+name: Build
+
+on:
+  push:
+    branches: [main, developer]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Maven-Build (Java 21)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: JDK 21 einrichten
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Bauen und testen
+        run: ./mvnw -B verify
+
+      - name: Testberichte sichern
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testberichte
+          path: |
+            target/surefire-reports/
+            target/failsafe-reports/
+            target/site/jacoco/
+          if-no-files-found: ignore
+          retention-days: 7
