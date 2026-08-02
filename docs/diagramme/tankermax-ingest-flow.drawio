@@ -1,0 +1,253 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram name="Ablauf Datensammlung (generisch)" id="ingest-gen">
+    <mxGraphModel dx="1024" dy="768" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="1080" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="i_title" value="Ablauf  Datensammlung  (generisch):  externe Preis-API  →  Datenspeicher" style="text;html=1;align=left;verticalAlign=middle;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="14" width="900" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="i_sched_note" value="Zwei regelmäßige Abläufe laufen im Hintergrund: der Preisabruf (rotierend über die Orte) und das Nachladen der Zusatzinfos." style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="40" y="46" width="800" height="22" as="geometry" />
+        </mxCell>
+
+        <mxCell id="i_fuelinit" value="Beim Start (einmalig)&#10;die unterstützten Kraftstoffarten anlegen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="860" y="44" width="270" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="i_api" value="Externe Preis-API&#10;Endpunkt: Umkreissuche       ·       Endpunkt: Detaildaten" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="440" y="104" width="320" height="64" as="geometry" />
+        </mxCell>
+
+        <mxCell id="i_lane_l" value="Preisabruf  (regelmäßig, rotierend)" style="text;html=1;align=center;verticalAlign=middle;fontStyle=2;fontSize=12;fontColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="40" y="178" width="360" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="i_lane_r" value="Zusatzinfos nachladen  (Vorbereitung)" style="text;html=1;align=center;verticalAlign=middle;fontStyle=2;fontSize=12;fontColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="760" y="178" width="370" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="i_poll" value="Preisabruf wird ausgelöst&#10;zeitgesteuert, in festen Abständen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="204" width="360" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="i_gate" value="Sind noch Tankstellen&#10;ohne Zusatzinfos offen?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="110" y="290" width="220" height="96" as="geometry" />
+        </mxCell>
+        <mxCell id="i_rotate" value="Nächste Region / nächsten Ort wählen&#10;eine je Durchlauf, danach weiterrücken" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="420" width="360" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="i_fetchList" value="Beim Endpunkt für die Umkreissuche anfragen&#10;Ort und Umkreis übergeben" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="512" width="360" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="i_resp" value="Antwort auswerten&#10;Liste der Tankstellen mit aktuellen Preisen&#10;(Name, Adresse, Standort, Status, Preise je Kraftstoff)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="606" width="360" height="76" as="geometry" />
+        </mxCell>
+        <mxCell id="i_tx" value="jede Tankstelle einzeln verarbeiten  ·  ein Fehler überspringt nur diese eine Tankstelle" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;fillColor=#f5f5f5;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="700" width="360" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="i_catalog" value="Stammdaten anlegen oder aktualisieren&#10;Marke, Name, Adresse, Standort&#10;(gleiche Tankstelle wird aktualisiert, nicht doppelt angelegt)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="752" width="360" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="i_price" value="Aktuelle Preise festhalten&#10;eine Beobachtung je Abfrage (mit Status offen/geschlossen)&#10;darin ein Preis je Kraftstoff (nur wenn vorhanden)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="838" width="360" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="i_enrich" value="Nachladen wird ausgelöst&#10;zeitgesteuert, in festen Abständen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="760" y="204" width="370" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="i_drain" value="Tankstellen ohne Zusatzinfos heraussuchen&#10;in Stapeln abarbeiten, bis keine mehr offen sind" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="760" y="300" width="370" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="i_fetchDetail" value="Beim Endpunkt für Detaildaten anfragen&#10;je Tankstelle einzeln (mit ihrer Kennung)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="760" y="512" width="370" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="i_respD" value="Antwort auswerten&#10;Öffnungszeiten, Ausnahmeregeln,&#10;Region / Bundesland, rund-um-die-Uhr-Kennzeichen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="760" y="606" width="370" height="76" as="geometry" />
+        </mxCell>
+        <mxCell id="i_apply" value="Zusatzinfos speichern&#10;Öffnungszeiten und Ausnahmen ersetzen, Region übernehmen&#10;Tankstelle als &quot;erfasst&quot; markieren&#10;(keine Daten verfügbar → trotzdem als geprüft markieren, damit sie nicht blockiert)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="760" y="752" width="370" height="92" as="geometry" />
+        </mxCell>
+
+        <mxCell id="i_rl" value="Drosselung der Aufrufe&#10;begrenzt das Tempo aller Anfragen (Ratenlimit einhalten)&#10;nach einer Sperre folgt eine längere Pause" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="450" y="506" width="300" height="64" as="geometry" />
+        </mxCell>
+
+        <mxCell id="i_db" value="Zentraler Datenspeicher&#10;Tankstellen · Marken · Kraftstoffarten&#10;Preisbeobachtungen · Preise&#10;Öffnungszeiten · Ausnahmeregeln" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="480" y="928" width="300" height="130" as="geometry" />
+        </mxCell>
+
+        <mxCell id="i_prio" value="Vorrang &amp; Tempo&#10;• Solange Tankstellen ohne Zusatzinfos offen sind, pausiert der Preisabruf – das Nachladen geht vor.&#10;• Kommt das Nachladen längere Zeit nicht voran, läuft der Preisabruf trotzdem weiter.&#10;• Beide Abläufe teilen sich dieselbe Drosselung, damit das Ratenlimit der API eingehalten wird." style="text;html=1;align=left;verticalAlign=top;fillColor=#f5f5f5;strokeColor=#999999;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="928" width="410" height="130" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ie_poll_gate" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="i_poll" target="i_gate">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ie_gate_rotate" value="nein (oder kein Fortschritt) → Preise abrufen" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="i_gate" target="i_rotate">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ie_gate_pause" value="ja → Preisabruf pausiert (Zusatzinfos zuerst)" style="endArrow=open;html=1;fontSize=10;dashed=1;strokeColor=#d6b656;" edge="1" parent="1" source="i_gate" target="i_enrich">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ie_rotate_fetch" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="i_rotate" target="i_fetchList">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ie_fetch_api" value="anfragen (Liste)" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="i_fetchList" target="i_api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ie_api_resp" value="Antwort" style="endArrow=block;html=1;fontSize=10;dashed=1;" edge="1" parent="1" source="i_api" target="i_resp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ie_resp_tx" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="i_resp" target="i_tx">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ie_tx_cat" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="i_tx" target="i_catalog">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ie_cat_price" value="danach" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="i_catalog" target="i_price">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ie_cat_db" value="speichern: Stammdaten" style="endArrow=block;html=1;fontSize=10;strokeColor=#9673a6;" edge="1" parent="1" source="i_catalog" target="i_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ie_price_db" value="speichern: Preise" style="endArrow=block;html=1;fontSize=10;strokeColor=#9673a6;" edge="1" parent="1" source="i_price" target="i_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ie_enrich_drain" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="i_enrich" target="i_drain">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ie_drain_fetch" value="je Tankstelle" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="i_drain" target="i_fetchDetail">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ie_fetchd_api" value="anfragen (Detail)" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="i_fetchDetail" target="i_api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ie_api_respd" value="Antwort" style="endArrow=block;html=1;fontSize=10;dashed=1;" edge="1" parent="1" source="i_api" target="i_respD">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ie_respd_apply" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="i_respD" target="i_apply">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ie_apply_db" value="speichern: Zusatzinfos" style="endArrow=block;html=1;fontSize=10;strokeColor=#9673a6;" edge="1" parent="1" source="i_apply" target="i_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ie_rl_l" value="drosselt jeden Aufruf" style="endArrow=open;html=1;fontSize=9;dashed=1;strokeColor=#d6b656;" edge="1" parent="1" source="i_rl" target="i_fetchList">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ie_rl_r" value="drosselt jeden Aufruf" style="endArrow=open;html=1;fontSize=9;dashed=1;strokeColor=#d6b656;" edge="1" parent="1" source="i_rl" target="i_fetchDetail">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ie_fuelinit_db" value="anlegen: Kraftstoffarten" style="endArrow=block;html=1;fontSize=10;dashed=1;strokeColor=#9673a6;" edge="1" parent="1" source="i_fuelinit" target="i_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram name="Fachliches Datenmodell (generisch)" id="model-gen">
+    <mxGraphModel dx="1024" dy="768" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="m_title" value="Fachliches Datenmodell (generisch) — welche Dinge gespeichert werden und wie sie zusammenhängen" style="text;html=1;align=left;verticalAlign=middle;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="16" width="900" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="m_legend" value="Lesehilfe:  1 — ∗  bedeutet „eins zu vielen“ (ein Datensatz links gehört zu beliebig vielen rechts).&#10;Es sind nur die fachlichen Inhalte aufgeführt, keine technischen Details." style="text;html=1;align=left;verticalAlign=top;fillColor=#f5f5f5;strokeColor=#999999;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="740" y="430" width="360" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t_brand" value="Marke" style="swimlane;html=1;startSize=26;fontStyle=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="240" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="brand_1" value="Name (z. B. Aral, Shell)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="t_brand">
+          <mxGeometry x="0" y="26" width="240" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t_fuel" value="Kraftstoffart" style="swimlane;html=1;startSize=26;fontStyle=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="200" width="240" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="fuel_1" value="Bezeichnung (E5, E10, Diesel)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="t_fuel">
+          <mxGeometry x="0" y="26" width="240" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t_station" value="Tankstelle" style="swimlane;html=1;startSize=26;fontStyle=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;" vertex="1" parent="1">
+          <mxGeometry x="360" y="80" width="300" height="146" as="geometry" />
+        </mxCell>
+        <mxCell id="st_1" value="Name" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="t_station">
+          <mxGeometry x="0" y="26" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_2" value="Adresse (Straße, PLZ, Ort)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="t_station">
+          <mxGeometry x="0" y="46" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_3" value="Standort (Koordinaten)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="t_station">
+          <mxGeometry x="0" y="66" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_4" value="Region / Bundesland" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="t_station">
+          <mxGeometry x="0" y="86" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_5" value="rund um die Uhr geöffnet?" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="t_station">
+          <mxGeometry x="0" y="106" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st_6" value="schon mit Zusatzinfos erfasst?" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="t_station">
+          <mxGeometry x="0" y="126" width="300" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t_obs" value="Preisbeobachtung" style="swimlane;html=1;startSize=26;fontStyle=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;" vertex="1" parent="1">
+          <mxGeometry x="760" y="80" width="320" height="66" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_1" value="Zeitpunkt der Abfrage" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="t_obs">
+          <mxGeometry x="0" y="26" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="obs_2" value="Status (geöffnet / geschlossen)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="t_obs">
+          <mxGeometry x="0" y="46" width="320" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t_price" value="Preis" style="swimlane;html=1;startSize=26;fontStyle=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;" vertex="1" parent="1">
+          <mxGeometry x="760" y="200" width="320" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="price_1" value="Betrag je Liter (€)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="t_price">
+          <mxGeometry x="0" y="26" width="320" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t_open" value="Öffnungszeit" style="swimlane;html=1;startSize=26;fontStyle=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;" vertex="1" parent="1">
+          <mxGeometry x="360" y="320" width="300" height="66" as="geometry" />
+        </mxCell>
+        <mxCell id="open_1" value="Tagesbereich (z. B. Mo-Fr)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="t_open">
+          <mxGeometry x="0" y="26" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="open_2" value="Uhrzeit von – bis" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="t_open">
+          <mxGeometry x="0" y="46" width="300" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t_exc" value="Ausnahmeregel" style="swimlane;html=1;startSize=26;fontStyle=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;" vertex="1" parent="1">
+          <mxGeometry x="360" y="430" width="300" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="exc_1" value="Beschreibung (z. B. Feiertag)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=6;overflow=hidden;" vertex="1" parent="t_exc">
+          <mxGeometry x="0" y="26" width="300" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="m_b_s" value="1 — ∗   (gehört zu)" style="endArrow=ERmany;startArrow=ERone;html=1;fontSize=10;" edge="1" parent="1" source="t_brand" target="t_station">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m_s_obs" value="1 — ∗   (je Abfrage)" style="endArrow=ERmany;startArrow=ERone;html=1;fontSize=10;" edge="1" parent="1" source="t_station" target="t_obs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m_obs_price" value="1 — ∗   (je Kraftstoff)" style="endArrow=ERmany;startArrow=ERone;html=1;fontSize=10;" edge="1" parent="1" source="t_obs" target="t_price">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m_fuel_price" value="1 — ∗   (gilt für)" style="endArrow=ERmany;startArrow=ERone;html=1;fontSize=10;" edge="1" parent="1" source="t_fuel" target="t_price">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m_s_open" value="1 — ∗" style="endArrow=ERmany;startArrow=ERone;html=1;fontSize=10;" edge="1" parent="1" source="t_station" target="t_open">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m_s_exc" value="1 — ∗" style="endArrow=ERmany;startArrow=ERone;html=1;fontSize=10;" edge="1" parent="1" source="t_station" target="t_exc">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

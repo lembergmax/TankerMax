@@ -1,0 +1,10 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="TankerMax (Web)" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="de.lembergmax.tankermax.TankerMaxApplication" />
+    <module name="TankerMax" />
+    <option name="PROGRAM_PARAMETERS" value="--spring.profiles.active=web" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

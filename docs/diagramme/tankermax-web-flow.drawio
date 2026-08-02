@@ -1,0 +1,219 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram name="Ablauf Anzeige (generisch)" id="web-gen">
+    <mxGraphModel dx="1024" dy="768" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1320" pageHeight="920" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="w_title" value="Ablauf  Anzeige  (generisch):  Datenspeicher  →  Oberfläche — die Pfeile zeigen den Weg der Daten zur Oberfläche" style="text;html=1;align=left;verticalAlign=middle;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="12" width="1100" height="28" as="geometry" />
+        </mxCell>
+
+        <mxCell id="w_browser" value="Web-Oberfläche im Browser&#10;fragt die Daten bei der Web-Schnittstelle an und stellt Tankstellen, Preise und Preisverlauf dar" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="50" width="1250" height="66" as="geometry" />
+        </mxCell>
+
+        <mxCell id="a_meta" value="Anfrage: allgemeine Infos&#10;(Zeitbezug für die Diagramm-Achse)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="160" width="290" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="a_regions" value="Anfrage: verfügbare Regionen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="360" y="160" width="290" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="a_stations" value="Anfrage: Tankstellen einer Region&#10;für einen Kraftstoff · optional nur geöffnete" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="680" y="160" width="290" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="a_history" value="Anfrage: Preisverlauf einer Tankstelle" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="160" width="290" height="56" as="geometry" />
+        </mxCell>
+
+        <mxCell id="d_meta" value="Ergebnis: Zeitbezug" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="252" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="d_regions" value="Ergebnis: Liste der Regionen&#10;(je Region mit Anzahl der Tankstellen)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="360" y="252" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="d_stations" value="Ergebnis: Liste der Tankstellen&#10;Marke, Name, Adresse, Standort, Entfernung,&#10;Status, aktueller Preis, Öffnungszeiten" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="680" y="252" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="d_history" value="Ergebnis: Preisverlauf&#10;Punkte aus Zeit und Preis&#10;(zeitlich sortiert)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="252" width="290" height="92" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s_meta" value="Aktuelle Zeit liefern&#10;(kein Zugriff auf den Datenspeicher nötig)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="382" width="290" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="s_regions" value="Regionen bestimmen&#10;und je Region die Tankstellen in der Umgebung zählen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="360" y="382" width="290" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="s_stations" value="Tankstellen der Region lesen&#10;• aktuellen Preis je Tankstelle ermitteln&#10;• Öffnungszeiten ergänzen&#10;• auf die Region eingrenzen&#10;• geschlossene auf Wunsch ausblenden" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="680" y="382" width="290" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="s_history" value="Preispunkte der letzten zwei Wochen lesen&#10;zeitlich sortiert" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="382" width="290" height="130" as="geometry" />
+        </mxCell>
+
+        <mxCell id="w_db" value="Zentraler Datenspeicher  (nur lesend)&#10;Tankstellen · Marken · Kraftstoffarten · Preisbeobachtungen · Preise · Öffnungszeiten" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="470" y="700" width="710" height="150" as="geometry" />
+        </mxCell>
+
+        <mxCell id="w_req_note" value="Auslöser:  Die Oberfläche fragt die Endpunkte an.&#10;Die Pfeile unten zeigen den Weg der Antwortdaten zurück zur Oberfläche." style="text;html=1;align=left;verticalAlign=top;fillColor=#f5f5f5;strokeColor=#999999;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="560" width="400" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="w_sec" value="Jede Antwort erhält grundlegende Sicherheits-Header." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="620" width="400" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="w_err" value="Bei Fehlern: eine klare Fehlermeldung statt technischer Details&#10;(z. B. ungültige Eingabe oder Datenspeicher nicht erreichbar)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="678" width="400" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="w_helpers" value="Hinweise&#10;• Die Anzeige liest nur – sie ändert keine Daten und ruft die externe API nicht auf.&#10;• Die wählbaren Regionen entsprechen den konfigurierten Orten." style="text;html=1;align=left;verticalAlign=top;fillColor=#f5f5f5;strokeColor=#999999;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="748" width="400" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="we_db_sreg" value="lesen" style="endArrow=block;html=1;fontSize=10;strokeColor=#9673a6;" edge="1" parent="1" source="w_db" target="s_regions">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="we_db_sstat" value="lesen" style="endArrow=block;html=1;fontSize=10;strokeColor=#9673a6;" edge="1" parent="1" source="w_db" target="s_stations">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="we_db_shist" value="lesen" style="endArrow=block;html=1;fontSize=10;strokeColor=#9673a6;" edge="1" parent="1" source="w_db" target="s_history">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="we_smeta_d" value="aufbereiten" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="s_meta" target="d_meta">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="we_sreg_d" value="aufbereiten" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="s_regions" target="d_regions">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="we_sstat_d" value="aufbereiten" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="s_stations" target="d_stations">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="we_shist_d" value="aufbereiten" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="s_history" target="d_history">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="we_dmeta_a" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="d_meta" target="a_meta">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="we_dreg_a" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="d_regions" target="a_regions">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="we_dstat_a" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="d_stations" target="a_stations">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="we_dhist_a" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="d_history" target="a_history">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="we_ameta_b" value="anzeigen" style="endArrow=block;html=1;fontSize=10;strokeColor=#6c8ebf;" edge="1" parent="1" source="a_meta" target="w_browser">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="we_areg_b" value="anzeigen" style="endArrow=block;html=1;fontSize=10;strokeColor=#6c8ebf;" edge="1" parent="1" source="a_regions" target="w_browser">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="we_astat_b" value="anzeigen" style="endArrow=block;html=1;fontSize=10;strokeColor=#6c8ebf;" edge="1" parent="1" source="a_stations" target="w_browser">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="we_ahist_b" value="anzeigen" style="endArrow=block;html=1;fontSize=10;strokeColor=#6c8ebf;" edge="1" parent="1" source="a_history" target="w_browser">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram name="Ladeablauf der Oberfläche (generisch)" id="webseq-gen">
+    <mxGraphModel dx="1024" dy="768" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="950" pageHeight="1160" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="q_title" value="Ladeablauf der Oberfläche (generisch) — in welcher Reihenfolge welche Daten geholt werden" style="text;html=1;align=left;verticalAlign=middle;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="16" width="860" height="28" as="geometry" />
+        </mxCell>
+
+        <mxCell id="q_endpoints" value="Anfragen an die Web-Schnittstelle" style="text;html=1;align=center;verticalAlign=middle;fontStyle=2;fontSize=12;fontColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="620" y="50" width="290" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="b_load" value="1 ·  Oberfläche im Browser laden&#10;Anzeige und Bedienelemente bereitstellen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="70" width="540" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="b_start" value="2 ·  Oberfläche starten&#10;zuletzt gewählte Einstellungen wiederherstellen (Region, Kraftstoff, Darstellung)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="154" width="540" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="b_meta" value="3 ·  Allgemeine Infos abrufen&#10;Zeitbezug für die Diagramm-Achse setzen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="240" width="540" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="b_regions" value="4 ·  Verfügbare Regionen abrufen&#10;Auswahl füllen · gespeicherte oder erste Region wählen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="320" width="540" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="b_stations" value="5 ·  Tankstellen der Region abrufen&#10;Liste anzeigen · oberste Tankstelle auswählen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="400" width="540" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="b_history" value="6 ·  Preisverlauf der Auswahl abrufen&#10;Diagramm zeichnen (Verlauf wird je Tankstelle zwischengespeichert)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="480" width="540" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="b_poll" value="7 ·  Regelmäßig auffrischen (alle paar Minuten)&#10;Preise neu laden, Liste und Anzeige aktualisieren (Diagramm bleibt erhalten)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;align=left;spacingLeft=8;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="566" width="540" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="b_inter" value="Interaktionen lösen neue Abfragen aus&#10;Region / Kraftstoff / Filter ändern → Tankstellen neu abrufen&#10;andere Tankstelle wählen → Preisverlauf    ·    mehrere (bis zu 4) vergleichen → mehrere Preisverläufe" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="652" width="540" height="74" as="geometry" />
+        </mxCell>
+        <mxCell id="b_note" value="Verhalten der Oberfläche&#10;• Veraltete Antworten (durch schnelles Umschalten) werden verworfen.&#10;• Die getroffene Auswahl wird gemerkt und beim nächsten Besuch wiederhergestellt.&#10;• Bereits geladene Preisverläufe werden zwischengespeichert.&#10;• Lassen sich die allgemeinen Infos nicht laden, wird ersatzweise die lokale Uhrzeit verwendet.&#10;• Bei Verbindungsproblemen erscheint ein Hinweis mit „Erneut versuchen“.&#10;• Es werden keine Daten geändert und die externe API nicht aufgerufen." style="text;html=1;align=left;verticalAlign=top;fillColor=#f5f5f5;strokeColor=#999999;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="752" width="540" height="150" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ep_meta" value="Anfrage: allgemeine Infos" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="640" y="244" width="240" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ep_regions" value="Anfrage: Regionen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="640" y="324" width="240" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ep_stations" value="Anfrage: Tankstellen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="640" y="404" width="240" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ep_history" value="Anfrage: Preisverlauf" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="640" y="484" width="240" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ep_stations2" value="Anfrage: Tankstellen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="640" y="570" width="240" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="qe_load_start" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="b_load" target="b_start">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="qe_start_meta" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="b_start" target="b_meta">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="qe_meta_regions" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="b_meta" target="b_regions">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="qe_regions_stations" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="b_regions" target="b_stations">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="qe_stations_history" style="endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="b_stations" target="b_history">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="qe_history_poll" value="danach, wiederkehrend" style="endArrow=block;html=1;fontSize=10;dashed=1;" edge="1" parent="1" source="b_history" target="b_poll">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="qe_meta_ep" value="anfragen" style="endArrow=open;html=1;fontSize=9;dashed=1;strokeColor=#d79b00;" edge="1" parent="1" source="b_meta" target="ep_meta">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="qe_regions_ep" value="anfragen" style="endArrow=open;html=1;fontSize=9;dashed=1;strokeColor=#d79b00;" edge="1" parent="1" source="b_regions" target="ep_regions">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="qe_stations_ep" value="anfragen" style="endArrow=open;html=1;fontSize=9;dashed=1;strokeColor=#d79b00;" edge="1" parent="1" source="b_stations" target="ep_stations">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="qe_history_ep" value="anfragen" style="endArrow=open;html=1;fontSize=9;dashed=1;strokeColor=#d79b00;" edge="1" parent="1" source="b_history" target="ep_history">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="qe_poll_ep" value="anfragen" style="endArrow=open;html=1;fontSize=9;dashed=1;strokeColor=#d79b00;" edge="1" parent="1" source="b_poll" target="ep_stations2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

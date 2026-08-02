@@ -10,21 +10,32 @@
     </parent>
     <groupId>de.lembergmax</groupId>
     <artifactId>TankerMax</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.0.1</version>
     <name>TankerMax</name>
-    <description>TankerMax</description>
-    <url/>
+    <description>Sammelt Spritpreise der Tankerkoenig-API in dritter Normalform und zeigt Verlauf und
+        KI-Preisvorhersage in einem schlanken Dashboard.</description>
+    <url>https://github.com/lembergmax/TankerMax</url>
+    <!-- Die Bloecke licenses/developers/scm sind zugleich Ueberschreibungen, die die Vererbung der
+         entsprechenden Angaben aus der Spring-Boot-Eltern-POM unterbinden (siehe HELP.md). -->
     <licenses>
-        <license/>
+        <license>
+            <name>MIT License</name>
+            <url>https://github.com/lembergmax/TankerMax/blob/main/LICENSE</url>
+            <distribution>repo</distribution>
+        </license>
     </licenses>
     <developers>
-        <developer/>
+        <developer>
+            <id>lembergmax</id>
+            <name>Max Lemberg</name>
+            <url>https://github.com/lembergmax</url>
+        </developer>
     </developers>
     <scm>
-        <connection/>
-        <developerConnection/>
-        <tag/>
-        <url/>
+        <connection>scm:git:https://github.com/lembergmax/TankerMax.git</connection>
+        <developerConnection>scm:git:git@github.com:lembergmax/TankerMax.git</developerConnection>
+        <tag>HEAD</tag>
+        <url>https://github.com/lembergmax/TankerMax</url>
     </scm>
     <properties>
         <java.version>21</java.version>
@@ -32,12 +43,110 @@
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- Eingebetteter Web-Server + Spring MVC fuer das Dashboard (Profil "web"); liefert
+             zugleich spring-web mit dem RestClient (Polling) und Jackson fuer JSON. Ob der
+             Web-Server startet, steuert spring.main.web-application-type (none im Profil "ingest",
+             servlet im Profil "web"). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+
+        <!-- Actuator + Micrometer: maschinenlesbarer Gesundheitsstatus (/actuator/health) und
+             Kennzahlen (/actuator/metrics) fuer die Beobachtbarkeit des Ingest. Die HTTP-Endpunkte
+             stehen nur bereit, wenn der eingebettete Web-Server laeuft (Profil "web"); ein reiner
+             "ingest"-Lauf bleibt kopflos und nutzt weiterhin die Protokollausgaben. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Serverseitiges Caching der Lese-Endpunkte mit kurzer Lebensdauer (Caffeine als
+             Cache-Anbieter), da sich die Daten nur im Poll-Takt aendern. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
+        <!-- Smile (Statistical Machine Intelligence & Learning Engine): reine Java-Bibliothek für das
+             Gradient-Boosting-Modell der Preisvorhersage. Bewusst gewählt, weil die Baum-Modelle ohne
+             native Bibliotheken auskommen und damit unverändert auf dem Raspberry Pi (aarch64) laufen.
+             Version 4.x ist die letzte für Java 21; smile-core liefert GradientTreeBoost samt LAD- und
+             Quantil-Verlust transitiv über smile-base/smile-data/smile-math. Nur im Profil "ingest"
+             tatsächlich genutzt (Training und Inferenz). -->
+        <dependency>
+            <groupId>com.github.haifengl</groupId>
+            <artifactId>smile-core</artifactId>
+            <version>4.3.0</version>
+            <!-- Die nativen BLAS/LAPACK-Bibliotheken (bytedeco openblas/arpack) liefern nur Binaries für
+                 x86_64-Windows/Linux/macOS – nicht für den Raspberry Pi (aarch64) –, blähen die JAR um
+                 ~200 MB auf und werden von den hier genutzten Baum-Modellen ohnehin nicht benötigt; Smile
+                 fällt ohne sie auf seine reine Java-Implementierung zurück. Daher ausgeschlossen. -->
+            <exclusions>
+                <exclusion>
+                    <groupId>org.bytedeco</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <!-- Smile bündelt den DuckDB-JDBC-Treiber (~73 MB) für seine Datei-/JDBC-Datenleser. Die
+                     Vorhersage baut ihre Datensätze direkt aus Zahlen-Arrays auf und nutzt diese Leser
+                     nicht; daher ausgeschlossen. -->
+                <exclusion>
+                    <groupId>org.duckdb</groupId>
+                    <artifactId>duckdb_jdbc</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.mariadb.jdbc</groupId>
+            <artifactId>mariadb-java-client</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
         </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- MockMvc und @WebMvcTest fuer die Slice-Tests des Web-Layers. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Testcontainers: echte Wegwerf-MariaDB fuer den Kontext-/Integrationstest in CI. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-mariadb</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -47,6 +156,90 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>default-compile</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                        <configuration>
+                            <annotationProcessorPaths>
+                                <path>
+                                    <groupId>org.projectlombok</groupId>
+                                    <artifactId>lombok</artifactId>
+                                </path>
+                            </annotationProcessorPaths>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>default-testCompile</id>
+                        <phase>test-compile</phase>
+                        <goals>
+                            <goal>testCompile</goal>
+                        </goals>
+                        <configuration>
+                            <annotationProcessorPaths>
+                                <path>
+                                    <groupId>org.projectlombok</groupId>
+                                    <artifactId>lombok</artifactId>
+                                </path>
+                            </annotationProcessorPaths>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Trennt schnelle Unit-Tests (Surefire, Phase test) von den langsamen,
+                 Docker-gestuetzten Integrationstests (Failsafe, Phase verify). Failsafe erkennt
+                 Klassen, deren Name auf "IT" endet, sodass "mvn test" ohne Container schnell bleibt
+                 und die Integrationstests erst bei "mvn verify" laufen. Die Version verwaltet die
+                 Spring-Boot-Eltern-POM. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Misst die Testabdeckung (Coverage) und erzeugt nach den Tests einen Bericht
+                 unter target/site/jacoco. Die Version verwaltet die Spring-Boot-Eltern-POM. -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
