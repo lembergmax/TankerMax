@@ -17,11 +17,15 @@
   // Sichtfenster-Konstanten (benannt statt Magic Numbers):
   const MIN_WINDOW_S = 2 * HOUR;             // kleinstes Sichtfenster (für sehr feine Zeitrahmen wie 5m)
   const FUTURE_PAD_S = 30 * MIN;             // Rand rechts des letzten Punktes
-  // Geladene Historientiefe (muss zu StationQueryService.HISTORY_DAYS passen): das Sichtfenster
-  // kann nie weiter zurueckreichen, als Daten vorliegen.
+  // Obergrenze des ANFÄNGLICHEN Sichtfensters (entspricht dem serverseitigen Vorgabefenster
+  // tankermax.web.history.default-days). Weiter zurück reicht die Erstansicht nicht; ältere Daten
+  // holt das Zurückscrollen über onNeedOlder nach.
   const HISTORY_MAX_S = 14 * DAY;
   // Angestrebte Zahl sichtbarer Kerzen, aus der sich das anfängliche Sichtfenster ableitet.
   const TARGET_BARS = 48;
+  // Ist der linke Rand näher als so viele Kerzen am ältesten geladenen Punkt, wird beim Scrollen in
+  // die Vergangenheit ein weiterer Verlaufsabschnitt nachgefordert (siehe onNeedOlder).
+  const LOAD_OLDER_THRESHOLD_BARS = 8;
   // Anfaengliches Sichtfenster PROPORTIONAL zum gewählten Zeitrahmen (Aggregations-Bucket): jeder
   // Zeitrahmen zeigt rund TARGET_BARS Kerzen und damit einen sichtbar anderen Ausschnitt – feine
   // Rahmen (5m/15m/1h/4h) zoomen auf die jüngste Vergangenheit (4 h … 8 T), grobe weiten bis zur
@@ -135,6 +139,10 @@
   let forecastLowLine = null, forecastMaxTime = 0;
   // Aggregationszustand für inkrementelle Live-Updates (von render/renderCompare gesetzt).
   let live = null;
+  // Nachladen älterer Historie: der an der Zeitachse registrierte Handler, ein Wachposten gegen
+  // Mehrfachauslösung während eines Ziehens und die zuletzt gezeichneten Optionen (tf/type/onNeedOlder),
+  // damit applyHistory die Reihe ohne vollständigen Neuaufbau erweitern kann.
+  let visibleRangeHandler = null, olderRequestPending = false, lastRenderOpts = null;
 
   function init(opts) {
     if (chart) { try { chart.remove(); } catch (e) {} chart = null; }
@@ -188,6 +196,45 @@
     forecastSeries = forecastLowSeries = forecastHighSeries = forecastLowLine = null;
     forecastMaxTime = 0;
     live = null;
+    if (chart && visibleRangeHandler) {
+      try { chart.timeScale().unsubscribeVisibleLogicalRangeChange(visibleRangeHandler); } catch (e) {}
+    }
+    visibleRangeHandler = null;
+    olderRequestPending = false;
+    lastRenderOpts = null;
+  }
+
+  // Beim Scrollen an den linken Rand ältere Historie nachfordern. Der Aufrufer (shared.js) übergibt
+  // in opts.onNeedOlder einen Rückruf, der die Daten holt und anschließend applyHistory aufruft.
+  function subscribeOlderHistory(opts) {
+    if (!chart || typeof opts.onNeedOlder !== 'function') {
+      return;
+    }
+    visibleRangeHandler = (range) => {
+      if (!range || olderRequestPending || range.from >= LOAD_OLDER_THRESHOLD_BARS) {
+        return;
+      }
+      olderRequestPending = true;
+      Promise.resolve(opts.onNeedOlder()).catch(() => {}).then(() => { olderRequestPending = false; });
+    };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(visibleRangeHandler);
+  }
+
+  // Die Historie ist nach vorne (ältere Punkte) gewachsen: die Hauptreihe neu befüllen, ohne den
+  // aktuellen Bildausschnitt zu verlieren. Der sichtbare Zeitbereich wird vor dem Setzen gesichert
+  // und danach wiederhergestellt, sodass die neuen Kerzen links außerhalb erscheinen.
+  function applyHistory(history) {
+    if (!chart || !mainSeries || !lastRenderOpts) {
+      return;
+    }
+    const opts = lastRenderOpts;
+    let visibleRange = null;
+    try { visibleRange = chart.timeScale().getVisibleRange(); } catch (e) {}
+    try { mainSeries.setData(aggregateForType(history, opts.tf, opts.type)); } catch (e) { return; }
+    live = buildLive(history, opts);
+    if (visibleRange) {
+      try { chart.timeScale().setVisibleRange(visibleRange); } catch (e) {}
+    }
   }
 
   // ── Vorhersage als zusätzliche Reihen über den Ist-Verlauf legen ──
@@ -248,6 +295,9 @@
     live = buildLive(history, opts);
     // Vorhersage einzeichnen (sofern aktiviert und vorhanden); weitet zugleich das Sichtfenster.
     addForecast(history, opts.forecast);
+    // Merken und die Zeitachse überwachen, damit beim Zurückscrollen ältere Historie nachgeladen wird.
+    lastRenderOpts = opts;
+    subscribeOlderHistory(opts);
 
     // Groesse setzen und den interessanten Ausschnitt rahmen, NACHDEM das Layout geflossen ist
     // (der Chart entsteht hinter der verborgenen Detailansicht und startet daher mit 0×0).
@@ -371,5 +421,5 @@
     });
   }
 
-  window.ChartView = { init, render, renderCompare, update, updateCompare, fmtPrice };
+  window.ChartView = { init, render, renderCompare, update, updateCompare, applyHistory, fmtPrice };
 })();

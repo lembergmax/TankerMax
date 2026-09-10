@@ -8,7 +8,7 @@ import de.lembergmax.tankermax.web.dto.PointDto;
 import de.lembergmax.tankermax.web.dto.RegionDto;
 import de.lembergmax.tankermax.web.GeoSupport.BoundingBox;
 import de.lembergmax.tankermax.web.dto.StationDto;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -36,11 +36,7 @@ import java.util.Map;
  */
 @Service
 @Profile("web")
-@RequiredArgsConstructor
 public class StationQueryService {
-
-    /** Anzahl der Tage, die für die Ist-Historie geladen werden. */
-    private static final int HISTORY_DAYS = 14;
 
     /**
      * Zeitfenster in Tagen, innerhalb dessen der jüngste Preis je Tankstelle gesucht wird. Der
@@ -62,6 +58,38 @@ public class StationQueryService {
 
     /** Konfiguration mit den abgefragten Orten. */
     private final TankerkoenigProperties properties;
+
+    /**
+     * Länge des Verlaufsfensters in Tagen, das eine Anfrage ohne ausdrücklichen Zeitbereich liefert
+     * (die Erstansicht des Charts). Weiter zurückliegende Daten holt das Frontend beim Zurückscrollen
+     * seitenweise über den {@code from}/{@code to}-Zeitbereich nach.
+     */
+    private final int defaultHistoryDays;
+
+    /**
+     * Obergrenze der Spanne (in Tagen), die eine einzelne Verlaufsanfrage abdecken darf. Ein weiter
+     * gefasster Bereich wird auf diese Spanne vor {@code to} beschnitten, damit eine einzelne Anfrage
+     * die Beobachtungstabelle nicht unbegrenzt scannt.
+     */
+    private final int maxHistorySpanDays;
+
+    /**
+     * Erzeugt den Dienst mit den benötigten Abhängigkeiten und der Konfiguration des Verlaufsfensters.
+     *
+     * @param jdbc               Zugriff auf die Datenbank
+     * @param properties         Konfiguration mit den abgefragten Orten
+     * @param defaultHistoryDays Länge des Verlaufsfensters ohne ausdrücklichen Zeitbereich (Tage)
+     * @param maxHistorySpanDays größte Spanne, die eine einzelne Verlaufsanfrage abdecken darf (Tage)
+     */
+    public StationQueryService(final JdbcTemplate jdbc,
+                               final TankerkoenigProperties properties,
+                               @Value("${tankermax.web.history.default-days:14}") final int defaultHistoryDays,
+                               @Value("${tankermax.web.history.max-span-days:370}") final int maxHistorySpanDays) {
+        this.jdbc = jdbc;
+        this.properties = properties;
+        this.defaultHistoryDays = defaultHistoryDays;
+        this.maxHistorySpanDays = maxHistorySpanDays;
+    }
 
     /**
      * Liefert die wählbaren Regionen (konfigurierte Orte) mit der Anzahl der Tankstellen im Radius.
@@ -128,24 +156,44 @@ public class StationQueryService {
     }
 
     /**
-     * Liefert die Ist-Preis-Historie einer Tankstelle der letzten Tage.
+     * Liefert die Ist-Preis-Historie einer Tankstelle für einen Zeitbereich.
      *
-     * @param stationId Kennung der Tankstelle
-     * @param fuelDb    Datenbank-Code des Kraftstoffs
-     * @return zeitlich sortierte Preispunkte (Euro/Liter)
+     * <p>Ohne {@code toChartSeconds} endet der Bereich beim aktuellen Zeitpunkt, ohne
+     * {@code fromChartSeconds} beginnt er {@code defaultHistoryDays} vor dem Ende. So liefert die
+     * parameterlose Anfrage die Erstansicht, während das Frontend beim Zurückscrollen mit einem
+     * älteren {@code from}/{@code to}-Bereich weitere Seiten nachlädt. Eine Spanne über
+     * {@code maxHistorySpanDays} wird auf diese Länge vor dem Ende beschnitten; ist der Bereich leer
+     * oder verkehrt herum, ist das Ergebnis leer.</p>
+     *
+     * @param stationId        Kennung der Tankstelle
+     * @param fuelDb           Datenbank-Code des Kraftstoffs
+     * @param fromChartSeconds Beginn des Bereichs als Chart-Sekunden oder {@code null} für die Vorgabe
+     * @param toChartSeconds   Ende des Bereichs als Chart-Sekunden oder {@code null} für „jetzt"
+     * @return zeitlich aufsteigend sortierte Preispunkte (Euro/Liter) im Bereich {@code [from, to)}
      */
-    public List<PointDto> history(final String stationId, final String fuelDb) {
-        final LocalDateTime cutoff = LocalDateTime.now(ZoneOffset.UTC).minus(HISTORY_DAYS, ChronoUnit.DAYS);
+    public List<PointDto> history(final String stationId, final String fuelDb,
+                                  final Long fromChartSeconds, final Long toChartSeconds) {
+        final LocalDateTime upper = toChartSeconds == null
+                ? LocalDateTime.now(ZoneOffset.UTC)
+                : ChartTime.toUtc(toChartSeconds);
+        final LocalDateTime requestedLower = fromChartSeconds == null
+                ? upper.minus(defaultHistoryDays, ChronoUnit.DAYS)
+                : ChartTime.toUtc(fromChartSeconds);
+        if (!requestedLower.isBefore(upper)) {
+            return List.of();
+        }
+        final LocalDateTime spanFloor = upper.minus(maxHistorySpanDays, ChronoUnit.DAYS);
+        final LocalDateTime lower = requestedLower.isBefore(spanFloor) ? spanFloor : requestedLower;
         return jdbc.query(
                 "SELECT po.observed_at AS observed_at, fp.amount AS amount FROM price_observation po "
                         + "JOIN fuel_price fp ON fp.observation_id = po.id "
                         + "JOIN fuel_type ft ON ft.id = fp.fuel_type_id "
                         + "WHERE po.station_id = ? AND ft.code = ? AND po.status = ? "
-                        + "AND po.observed_at >= ? ORDER BY po.observed_at",
+                        + "AND po.observed_at >= ? AND po.observed_at < ? ORDER BY po.observed_at",
                 (resultSet, row) -> new PointDto(
                         ChartTime.fromUtc(resultSet.getObject("observed_at", LocalDateTime.class)),
                         resultSet.getBigDecimal("amount").doubleValue()),
-                stationId, fuelDb, OPEN_STATUS, cutoff);
+                stationId, fuelDb, OPEN_STATUS, lower, upper);
     }
 
     /**

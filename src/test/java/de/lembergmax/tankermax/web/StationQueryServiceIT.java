@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import de.lembergmax.tankermax.web.dto.PointDto;
 import de.lembergmax.tankermax.web.dto.StationDto;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -154,6 +155,60 @@ class StationQueryServiceIT {
     @Test
     void regionZaehltTankstellenImRadius() {
         assertEquals(2, service.regions().get(0).count());
+    }
+
+    /**
+     * Ohne Zeitbereich liefert {@code history} die Punkte des Vorgabefensters zeitlich aufsteigend
+     * (ältere 1,500 vor jüngerer 1,600).
+     */
+    @Test
+    void historieLiefertVorgabefensterAufsteigend() {
+        final List<PointDto> points = service.history("S1", "DIESEL", null, null);
+        assertEquals(2, points.size());
+        assertEquals(1.5, points.get(0).value(), 0.0001);
+        assertEquals(1.6, points.get(1).value(), 0.0001);
+        assertTrue(points.get(0).time() < points.get(1).time());
+    }
+
+    /**
+     * Ein ausdrücklicher {@code from}/{@code to}-Bereich grenzt die Punkte ein: Das Vorgabefenster
+     * (14 Tage) blendet einen 20 Tage alten Punkt aus, ein weiter gefasster bzw. gezielt älterer
+     * Bereich holt ihn – und nur ihn – nach.
+     */
+    @Test
+    void historieBeschraenktSichAufDenZeitbereich() {
+        insertOpenPrice("S1", dieselId(), 20L * 24 * 3600, "1.400");
+        final long now = ChartTime.now();
+
+        assertEquals(2, service.history("S1", "DIESEL", null, null).size());
+
+        final List<PointDto> wide = service.history("S1", "DIESEL", now - 30L * 24 * 3600, now);
+        assertEquals(3, wide.size());
+        assertEquals(1.4, wide.get(0).value(), 0.0001);
+
+        final List<PointDto> older = service.history("S1", "DIESEL",
+                now - 25L * 24 * 3600, now - 15L * 24 * 3600);
+        assertEquals(1, older.size());
+        assertEquals(1.4, older.get(0).value(), 0.0001);
+    }
+
+    /**
+     * Ein leerer oder verkehrt herum angegebener Bereich ({@code from} nicht vor {@code to}) liefert
+     * eine leere Liste, statt zu scheitern.
+     */
+    @Test
+    void historieMitVerkehrtemBereichIstLeer() {
+        final long now = ChartTime.now();
+        assertTrue(service.history("S1", "DIESEL", now, now - 3600).isEmpty());
+    }
+
+    /**
+     * Kennung der Kraftstoffart Diesel aus dem in {@link #seedData()} angelegten Datenbestand.
+     *
+     * @return technische Kennung der Kraftstoffart Diesel
+     */
+    private Long dieselId() {
+        return jdbc.queryForObject("SELECT id FROM fuel_type WHERE code = 'DIESEL'", Long.class);
     }
 
 }

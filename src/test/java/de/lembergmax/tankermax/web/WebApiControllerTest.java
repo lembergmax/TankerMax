@@ -155,16 +155,33 @@ class WebApiControllerTest {
     }
 
     /**
-     * {@code GET /api/history} liefert Status 200 und ein JSON-Array.
+     * {@code GET /api/history} liefert ohne Zeitbereich Status 200 und ein JSON-Array; die
+     * Bereichsgrenzen werden dabei als {@code null} an den Dienst übergeben (Vorgabefenster).
      *
      * @throws Exception wenn die Anfrage fehlschlägt
      */
     @Test
     void historieLiefertArray() throws Exception {
-        when(stationService.history("stat-1", "DIESEL")).thenReturn(List.of());
+        when(stationService.history("stat-1", "DIESEL", null, null)).thenReturn(List.of());
         mvc.perform(get("/api/history").param("station", "stat-1").param("fuel", "diesel"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray());
+    }
+
+    /**
+     * {@code GET /api/history} bindet {@code from}/{@code to} und reicht den Zeitbereich an den
+     * Dienst durch (Nachladen älterer Abschnitte beim Zurückscrollen).
+     *
+     * @throws Exception wenn die Anfrage fehlschlägt
+     */
+    @Test
+    void historieBereichWirdAnDenDienstDurchgereicht() throws Exception {
+        when(stationService.history("stat-1", "DIESEL", 1000L, 2000L)).thenReturn(List.of());
+        mvc.perform(get("/api/history")
+                        .param("station", "stat-1").param("fuel", "diesel")
+                        .param("from", "1000").param("to", "2000"))
+                .andExpect(status().isOk());
+        verify(stationService).history("stat-1", "DIESEL", 1000L, 2000L);
     }
 
 }

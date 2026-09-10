@@ -22,8 +22,11 @@
     getRegions: () => get('/regions'),
     getStations: (region, fuel, openOnly) =>
       get('/stations?region=' + encodeURIComponent(region) + '&fuel=' + encodeURIComponent(fuel) + (openOnly ? '&openOnly=true' : '')),
-    getHistory: (station, fuel) =>
-      get('/history?station=' + encodeURIComponent(station) + '&fuel=' + encodeURIComponent(fuel)),
+    // Ohne from/to liefert der Server das Vorgabefenster (Erstansicht); mit Bereich (Chart-Sekunden)
+    // laedt das Dashboard beim Zurueckscrollen aeltere Abschnitte nach.
+    getHistory: (station, fuel, from, to) =>
+      get('/history?station=' + encodeURIComponent(station) + '&fuel=' + encodeURIComponent(fuel)
+        + (from != null ? '&from=' + from : '') + (to != null ? '&to=' + to : '')),
     // KI-Vorhersage einer Tankstelle (vorab berechnet, read-only aus der Datenbank).
     getForecast: (station, fuel) =>
       get('/forecast?station=' + encodeURIComponent(station) + '&fuel=' + encodeURIComponent(fuel)),

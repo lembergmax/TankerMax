@@ -29,6 +29,9 @@
   // steht (kein EventSource, Verbindungsabbruch). Im Normalbetrieb schiebt der Server die Updates
   // über window.TKLIVE/SSE; dann läuft dieser Poll leer und erzeugt keine zusätzliche Last.
   const POLL_INTERVAL_MS = 60000;
+  // Länge eines Verlaufsabschnitts (Sekunden), den der Chart beim Zurückscrollen zusätzlich nachlädt.
+  // Entspricht dem serverseitigen Vorgabefenster (tankermax.web.history.default-days).
+  const HISTORY_CHUNK_S = 14 * 24 * 3600;
   // Persistenz nutzerseitiger Auswahl in localStorage (Praefix wie beim Theme: tk-pro-*).
   const LS_PREFIX = 'tk-pro-';
   function lsGet(key) { try { return localStorage.getItem(LS_PREFIX + key); } catch (e) { return null; } }
@@ -75,6 +78,10 @@
 
     let stationCache = [];
     const seriesCache = new Map();
+    // Nachlade-Zustand der Ist-Historie je Tankstelle: ältester geladener Zeitpunkt (Chart-Sekunden),
+    // ob die DB keine älteren Daten mehr hat und ob gerade ein Nachladen läuft. Wird wie seriesCache
+    // bei Region-/Kraftstoffwechsel geleert.
+    const historyMeta = new Map();
     // Zwischenspeicher der KI-Vorhersagen je Tankstelle (wird wie seriesCache bei Region-/
     // Kraftstoffwechsel geleert, da die Vorhersage vom Kraftstoff abhängt).
     const forecastCache = new Map();
@@ -120,7 +127,7 @@
 
     async function loadStations(g) {
       if (adapter.renderListSkeleton) adapter.renderListSkeleton(ctx);
-      if (!state.region) { stationCache = []; state.loadError = regionsFailed; seriesCache.clear(); return; }
+      if (!state.region) { stationCache = []; state.loadError = regionsFailed; seriesCache.clear(); historyMeta.clear(); return; }
       try {
         const list = await API.getStations(state.region, state.fuel, state.hideClosed);
         if (g != null && g !== nav) return;
@@ -134,6 +141,11 @@
       }
       seriesCache.clear();
       forecastCache.clear();
+      historyMeta.clear();
+    }
+    // Client-Fallback fuer "jetzt" in Chart-Sekunden, wenn noch keine Historie vorliegt.
+    function chartNow() {
+      return (window.TKCLOCK && window.TKCLOCK.now) || Math.floor(Date.now() / 1000);
     }
     // Einzelne Historie robust laden: ein Fehler darf die Detailansicht nicht
     // abbrechen; der Fehlschlag wird nicht gecacht, damit er spaeter erneut greift.
@@ -143,7 +155,47 @@
       try { history = await API.getHistory(id, state.fuel); }
       catch (e) { return []; }
       seriesCache.set(id, history);
+      historyMeta.set(id, {
+        oldestLoaded: history.length ? history[0].time : chartNow(),
+        exhausted: history.length === 0,
+        loading: false,
+      });
       return history;
+    }
+    // Aelteren Verlaufsabschnitt nachladen und dem Cache voranstellen. Liefert true, wenn neue
+    // (aeltere) Punkte hinzukamen. Ein leeres Ergebnis markiert die Tankstelle als erschoepft, sodass
+    // nicht weiter nachgefragt wird.
+    async function loadOlderHistory(id) {
+      const meta = historyMeta.get(id);
+      if (!meta || meta.loading || meta.exhausted) return false;
+      meta.loading = true;
+      const to = meta.oldestLoaded;
+      const from = to - HISTORY_CHUNK_S;
+      let older;
+      try { older = await API.getHistory(id, state.fuel, from, to); }
+      catch (e) { meta.loading = false; return false; }
+      older = (older || []).filter(p => p.time < meta.oldestLoaded);
+      if (!older.length) { meta.exhausted = true; meta.loading = false; return false; }
+      seriesCache.set(id, older.concat(seriesCache.get(id) || []));
+      meta.oldestLoaded = older[0].time;
+      meta.loading = false;
+      return true;
+    }
+    // Rueckruf des Charts: der linke Rand naehert sich dem aeltesten geladenen Punkt. Laedt den
+    // naechsten Abschnitt und erweitert die Chart-Reihe unter Erhalt des Bildausschnitts.
+    function requestOlder() {
+      const s = selected();
+      if (!s || state.compare) return Promise.resolve();
+      const id = s.id;
+      return loadOlderHistory(id).then(changed => {
+        if (!changed || id !== chartStationId) return;
+        try { window.ChartView.applyHistory(seriesCache.get(id)); } catch (e) {}
+      });
+    }
+    // Chart-Optionen der Einzelansicht an einer Stelle gebuendelt (render/renderChart/liveUpdate
+    // nutzen denselben Satz inkl. Rueckruf zum Nachladen aelterer Historie).
+    function chartOpts(forecast) {
+      return { type: state.chartType, tf: state.tf, forecast, onNeedOlder: requestOlder };
     }
     // KI-Vorhersage robust laden: ein Fehler darf die Detailansicht nicht abbrechen; der Fehlschlag
     // wird nicht gecacht, damit er später erneut greift. Liefert null bei Fehler.
@@ -175,7 +227,7 @@
       const history = await ensureHistory(s.id);
       const forecast = state.forecast ? await ensureForecast(s.id) : null;
       if (g != null && g !== nav) return;
-      try { window.ChartView.render(history, { type: state.chartType, tf: state.tf, forecast }); } catch (e) {}
+      try { window.ChartView.render(history, chartOpts(forecast)); } catch (e) {}
       chartStationId = s.id;
       chartRawMaxTime = history.length ? history[history.length - 1].time : 0;
       adapter.renderSelection({ s, hist: history, cur: priceOf(s), forecast }, ctx);
@@ -193,7 +245,7 @@
       const history = await ensureHistory(s.id);
       const forecast = state.forecast ? await ensureForecast(s.id) : null;
       if (g != null && g !== nav) return;
-      try { window.ChartView.render(history, { type: state.chartType, tf: state.tf, forecast }); } catch (e) {}
+      try { window.ChartView.render(history, chartOpts(forecast)); } catch (e) {}
       chartStationId = s.id;
       chartRawMaxTime = history.length ? history[history.length - 1].time : 0;
     }
@@ -387,18 +439,31 @@
       try { nh = await API.getHistory(s.id, state.fuel); }
       catch (e) { return; }
       if (g !== nav) return;
-      seriesCache.set(s.id, nh);
+      // Das Vorgabefenster nur um echte neue Punkte am Ende ergaenzen – so bleibt zuvor per
+      // Zurueckscrollen nachgeladene aeltere Historie im Cache erhalten.
+      const cached = seriesCache.get(s.id) || [];
+      const cachedMax = cached.length ? cached[cached.length - 1].time : 0;
+      const appended = nh.filter(p => p.time > cachedMax);
+      const merged = cached.length ? (appended.length ? cached.concat(appended) : cached) : nh;
+      seriesCache.set(s.id, merged);
+      if (!historyMeta.has(s.id)) {
+        historyMeta.set(s.id, {
+          oldestLoaded: merged.length ? merged[0].time : chartNow(),
+          exhausted: merged.length === 0,
+          loading: false,
+        });
+      }
       if (s.id !== chartStationId || !chartRawMaxTime) {
         const forecast = state.forecast ? await ensureForecast(s.id) : null;
         if (g !== nav) return;
-        try { window.ChartView.render(nh, { type: state.chartType, tf: state.tf, forecast }); } catch (e) {}
+        try { window.ChartView.render(merged, chartOpts(forecast)); } catch (e) {}
         chartStationId = s.id;
-        chartRawMaxTime = nh.length ? nh[nh.length - 1].time : 0;
+        chartRawMaxTime = merged.length ? merged[merged.length - 1].time : 0;
         refreshSelectionPanel();
         return;
       }
       let changed = false;
-      for (const p of nh) {
+      for (const p of appended) {
         if (p.time > chartRawMaxTime) { try { window.ChartView.update(p); } catch (e) {} chartRawMaxTime = p.time; changed = true; }
       }
       if (changed) refreshSelectionPanel();
