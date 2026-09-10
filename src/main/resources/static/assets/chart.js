@@ -211,11 +211,19 @@
       return;
     }
     visibleRangeHandler = (range) => {
-      if (!range || olderRequestPending || range.from >= LOAD_OLDER_THRESHOLD_BARS) {
+      if (!range || !mainSeries || olderRequestPending) {
+        return;
+      }
+      let barsInfo;
+      try { barsInfo = mainSeries.barsInLogicalRange(range); } catch (e) { return; }
+      // range.from ist ein chartweiter logischer Index und verschiebt sich, wenn setData() ältere
+      // Punkte voranstellt. barsBefore misst dagegen relativ zum tatsächlichen Anfang der Reihe und
+      // löst deshalb auch an der zweiten und jeder weiteren nachgeladenen Seite zuverlässig aus.
+      if (!barsInfo || barsInfo.barsBefore >= LOAD_OLDER_THRESHOLD_BARS) {
         return;
       }
       olderRequestPending = true;
-      Promise.resolve(opts.onNeedOlder()).catch(() => {}).then(() => { olderRequestPending = false; });
+      Promise.resolve().then(() => opts.onNeedOlder()).catch(() => {}).then(() => { olderRequestPending = false; });
     };
     chart.timeScale().subscribeVisibleLogicalRangeChange(visibleRangeHandler);
   }
