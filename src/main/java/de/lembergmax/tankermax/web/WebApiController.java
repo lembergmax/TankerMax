@@ -76,16 +76,23 @@ public class WebApiController {
     }
 
     /**
-     * Liefert die Ist-Historie einer Tankstelle.
+     * Liefert die Ist-Historie einer Tankstelle für einen Zeitbereich.
+     *
+     * <p>Ohne {@code from}/{@code to} wird das Vorgabefenster geliefert (die Erstansicht). Das
+     * Frontend übergibt beim Zurückscrollen einen älteren Bereich, um weitere Seiten nachzuladen.</p>
      *
      * @param station Kennung der Tankstelle
      * @param fuel    Frontend-Kennung des Kraftstoffs
-     * @return Ist-Preiskurve
+     * @param from    Beginn des Bereichs als Chart-Sekunden oder {@code null} für die Vorgabe
+     * @param to      Ende des Bereichs als Chart-Sekunden oder {@code null} für „jetzt"
+     * @return Ist-Preiskurve im gewählten Bereich
      */
     @GetMapping("/history")
     public List<PointDto> history(@RequestParam @NotBlank @Size(max = MAX_IDENTIFIER_LENGTH) final String station,
-                                  @RequestParam final String fuel) {
-        return stationService.history(station, requireKnownFuel(fuel));
+                                  @RequestParam final String fuel,
+                                  @RequestParam(required = false) final Long from,
+                                  @RequestParam(required = false) final Long to) {
+        return stationService.history(station, requireKnownFuel(fuel), from, to);
     }
 
     /**

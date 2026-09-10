@@ -31,4 +31,17 @@ class ChartTimeTest {
         assertEquals(ChartTime.fromLocal(berlinLocal), ChartTime.fromUtc(utc));
     }
 
+    /**
+     * {@link ChartTime#toUtc(long)} kehrt {@link ChartTime#fromUtc(LocalDateTime)} um: aus den
+     * Chart-Sekunden entsteht wieder der ursprüngliche UTC-Zeitstempel (Winter wie Sommer, also über
+     * einen Zeitzonenwechsel hinweg).
+     */
+    @Test
+    void toUtcKehrtFromUtcUm() {
+        final LocalDateTime winter = LocalDateTime.of(2026, 1, 15, 12, 0);
+        final LocalDateTime sommer = LocalDateTime.of(2026, 7, 15, 12, 0);
+        assertEquals(winter, ChartTime.toUtc(ChartTime.fromUtc(winter)));
+        assertEquals(sommer, ChartTime.toUtc(ChartTime.fromUtc(sommer)));
+    }
+
 }
